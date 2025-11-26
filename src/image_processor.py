@@ -81,10 +81,16 @@ class ImageProcessor:
         return image
 
     def _draw_text_in_box(self, draw: ImageDraw.ImageDraw, text: str, x: int, y: int, w: int, h: int):
-        """
-        Fits text inside a box by iteratively reducing font size and wrapping.
+        """\n         Fits text inside a box by iteratively reducing font size and wrapping.
         """
         import textwrap
+        
+        # Skip drawing if text is None or empty/whitespace
+        if text is None:
+            return
+        text = str(text)
+        if not text.strip():
+            return
         
         # Minimum legible font size
         min_fontsize = 8
