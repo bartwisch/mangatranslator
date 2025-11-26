@@ -218,6 +218,10 @@ class OCRHandler:
         """Detect text using Manga-OCR - specialized for manga/comic fonts."""
         manga_ocr, detector = self._load_manga_ocr()
         
+        # Ensure 3-channel image for PaddleOCR/PaddleX doc preprocessor
+        if len(processed_image.shape) == 2:
+            processed_image = np.stack([processed_image] * 3, axis=-1)
+
         # Use PaddleOCR for detection, then manga-ocr for recognition
         detection_result = detector.ocr(processed_image)
         
@@ -274,7 +278,10 @@ class OCRHandler:
         """Detect text using PaddleOCR - fast and general purpose."""
         reader = self._load_paddleocr()
         
-        # PaddleOCR expects BGR or RGB numpy array
+        # PaddleOCR expects 3-channel BGR/RGB numpy array
+        if len(processed_image.shape) == 2:
+            processed_image = np.stack([processed_image] * 3, axis=-1)
+
         result = reader.ocr(processed_image)
         
         final_results = []
