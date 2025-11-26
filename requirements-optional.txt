@@ -1,0 +1,12 @@
+# Optional OCR Engines
+# Install only the ones you want to use:
+
+# Manga-OCR (specialized for manga/comic fonts)
+manga-ocr
+
+# PaddleOCR (fast and general purpose)
+paddlepaddle
+paddleocr
+
+# EasyOCR (multi-language support)
+easyocr

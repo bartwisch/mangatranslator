@@ -1,0 +1,22 @@
+streamlit
+PyMuPDF
+deep-translator
+opencv-python-headless
+Pillow
+numpy
+scipy
+certifi
+openai
+deepl
+
+# Default OCR Engine (Magi - best for manga)
+torch
+torchvision
+transformers
+einops
+timm
+matplotlib
+watchdog
+
+# Geometry / spatial dependencies used by Magi
+shapely

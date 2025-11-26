@@ -1,0 +1,34 @@
+# Python
+__pycache__/
+*.py[cod]
+*$py.class
+*.pyc
+
+# Virtual Environment
+venv/
+env/
+.env
+
+# Streamlit
+.streamlit/
+
+# IDE / Editor
+.gemini/
+.vscode/
+.idea/
+*.swp
+*.swo
+
+# Internal notes
+TASK.md
+
+# Output Files
+translated_manga.pdf
+*.pdf
+*.png
+*.jpg
+*.jpeg
+
+# OS Files
+.DS_Store
+Thumbs.db

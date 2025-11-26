@@ -1,0 +1,327 @@
+import streamlit as st
+import os
+import tempfile
+from PIL import Image, ImageDraw, ImageFont
+import numpy as np
+from src.pdf_handler import PDFHandler
+
+st.set_page_config(page_title="Configuration", page_icon="⚙️", layout="wide")
+
+st.title("⚙️ Configuration")
+
+# Initialize PDF handler globally
+pdf_handler = PDFHandler()
+
+# Session state initialization
+if 'config_pdf_path' not in st.session_state:
+    st.session_state.config_pdf_path = None
+if 'config_previews' not in st.session_state:
+    st.session_state.config_previews = []
+if 'selected_page' not in st.session_state:
+    st.session_state.selected_page = None
+if 'ocr_cache' not in st.session_state:
+    st.session_state.ocr_cache = {}
+if 'high_res_images' not in st.session_state:
+    st.session_state.high_res_images = {}
+
+# --- Global Settings (Session State) ---
+if 'stored_deepl_key' not in st.session_state:
+    st.session_state.stored_deepl_key = ""
+if 'stored_openai_key' not in st.session_state:
+    st.session_state.stored_openai_key = ""
+if 'stored_xai_key' not in st.session_state:
+    st.session_state.stored_xai_key = ""
+if 'translation_service_selection' not in st.session_state:
+    st.session_state.translation_service_selection = "OpenAI GPT-4o-mini (API Key - Recommended)"
+if 'debug_mode_checkbox' not in st.session_state:
+    st.session_state.debug_mode_checkbox = True
+if 'show_boxes_checkbox' not in st.session_state:
+    st.session_state.show_boxes_checkbox = False
+if 'bubble_threshold_setting' not in st.session_state:
+    st.session_state.bubble_threshold_setting = 160
+if 'ocr_engine_selection' not in st.session_state:
+    st.session_state.ocr_engine_selection = "magi"
+if 'ocr_preprocess_mode' not in st.session_state:
+    st.session_state.ocr_preprocess_mode = "gentle"
+
+# Create tabs for different configuration sections
+tab_general, tab_ocr_tool = st.tabs(["🌍 General Settings", "🔧 OCR Tool"])
+
+with tab_general:
+    st.header("Global Application Settings")
+    
+    col1, col2 = st.columns(2)
+    
+    with col1:
+        st.subheader("Translation Service")
+        service_options = [
+            "OpenAI GPT-4o-mini (API Key - Recommended)", 
+            "Google Translate (Free - Experimental)", 
+            "DeepL (API Key - Experimental)", 
+            "xAI Grok (API Key - Experimental)", 
+            "xAI Grok Vision (No OCR - Experimental)"
+        ]
+        
+        st.selectbox(
+            "Select Translation Service",
+            options=service_options,
+            key='translation_service_selection'
+        )
+        
+        service_choice = st.session_state.translation_service_selection
+        
+        if "DeepL" in service_choice:
+            st.text_input("DeepL API Key", type="password", key="stored_deepl_key", help="Paste your DeepL API Key here.")
+        elif "OpenAI" in service_choice:
+            st.text_input("OpenAI API Key", type="password", key="stored_openai_key", help="Paste your OpenAI API Key here.")
+        elif "xAI" in service_choice:
+            st.text_input("xAI API Key", type="password", key="stored_xai_key", help="Paste your xAI API Key here.")
+
+    with col2:
+        st.subheader("Debug & Display Options")
+        st.checkbox("Debug Mode", help="Show OCR text vs. Translation table.", key="debug_mode_checkbox")
+        st.checkbox("Show OCR Boxes", help="Zeigt nur die erkannten Textbereiche als Rahmen.", key="show_boxes_checkbox")
+        
+        st.slider(
+            "Bubble Grouping Distance (Global)", 
+            min_value=30, 
+            max_value=300, 
+            step=10,
+            key="bubble_threshold_setting",
+            help="Maximaler Abstand (Pixel) um Textzeilen zu einer Sprechblase zusammenzufassen. Höher = mehr Gruppierung."
+        )
+
+with tab_ocr_tool:
+    st.header("OCR Configuration & Testing Tool")
+    
+    # OCR Settings at the top
+    st.subheader("🔧 Global OCR Settings")
+    col_ocr1, col_ocr2 = st.columns(2)
+    
+    with col_ocr1:
+        st.selectbox(
+            "OCR Engine",
+            options=['magi', 'manga-ocr', 'paddleocr', 'easyocr'],
+            key='ocr_engine_selection',
+            help="'magi' = best for manga (detects speech bubbles) [DEFAULT], 'manga-ocr' = specialized for manga fonts, 'paddleocr' = fast and general purpose, 'easyocr' = multi-language support"
+        )
+    
+    with col_ocr2:
+        st.selectbox(
+            "OCR Preprocessing",
+            options=['gentle', 'none', 'aggressive'],
+            key='ocr_preprocess_mode',
+            help="'gentle' = recommended for manga, 'none' = original image, 'aggressive' = strong binarization"
+        )
+    
+    st.divider()
+    st.subheader("📄 Test OCR on PDF Pages")
+    st.markdown("Lade ein PDF hoch, klicke auf eine Seite, und passe den Threshold an um die Sprechblasen-Erkennung zu optimieren.")
+
+    def draw_boxes(image: Image.Image, text_results):
+        """Zeichnet farbige Boxen auf das Bild"""
+        img_copy = image.copy()
+        draw = ImageDraw.Draw(img_copy)
+        
+        # Lade Font
+        try:
+            font = ImageFont.truetype("Arial.ttf", 14)
+        except:
+            try:
+                font = ImageFont.truetype("/System/Library/Fonts/Helvetica.ttc", 14)
+            except:
+                font = ImageFont.load_default()
+        
+        colors = ["#FF0000", "#0066FF", "#00CC00", "#FF9900", "#9900FF", "#00CCCC", "#FF00FF", "#FFCC00"]
+        
+        for i, item in enumerate(text_results):
+            bbox = item[0]
+            text = item[1] if len(item) > 1 else ""
+            
+            pts = np.array(bbox)
+            x_min = int(np.min(pts[:, 0]))
+            y_min = int(np.min(pts[:, 1]))
+            x_max = int(np.max(pts[:, 0]))
+            y_max = int(np.max(pts[:, 1]))
+            
+            box_color = colors[i % len(colors)]
+            
+            # Dicken Rahmen zeichnen
+            for offset in range(4):
+                draw.rectangle(
+                    [x_min - offset, y_min - offset, x_max + offset, y_max + offset], 
+                    outline=box_color
+                )
+            
+            # Hintergrund für Label
+            label = f"[{i+1}]"
+            draw.rectangle([x_min, y_min - 20, x_min + 30, y_min], fill=box_color)
+            draw.text((x_min + 2, y_min - 18), label, fill="white", font=font)
+        
+        return img_copy
+
+    def select_page(page_num):
+        st.session_state.selected_page = page_num
+
+    # PDF Upload
+    uploaded_pdf = st.file_uploader("📄 PDF hochladen (für OCR Config)", type=["pdf"])
+
+    if uploaded_pdf:
+        # Check if new file
+        file_id = f"{uploaded_pdf.name}_{uploaded_pdf.size}"
+        
+        if st.session_state.config_pdf_path is None or not os.path.exists(st.session_state.config_pdf_path):
+            # Save temp PDF
+            with tempfile.NamedTemporaryFile(delete=False, suffix=".pdf") as tmp:
+                tmp.write(uploaded_pdf.read())
+                st.session_state.config_pdf_path = tmp.name
+            
+            # Generate previews
+            with st.spinner("Lade Seiten-Vorschau..."):
+                st.session_state.config_previews = pdf_handler.extract_images_from_pdf(
+                    st.session_state.config_pdf_path, zoom=0.8
+                )
+            st.session_state.selected_page = None
+            st.session_state.ocr_cache = {}
+            st.session_state.high_res_images = {}
+        
+        if st.session_state.config_previews:
+            if st.session_state.selected_page is None:
+                # Show page grid
+                st.subheader("📖 Seite auswählen")
+                
+                num_cols = 5
+                cols = st.columns(num_cols)
+                
+                for i, preview in enumerate(st.session_state.config_previews):
+                    with cols[i % num_cols]:
+                        st.markdown(f"Seite {i+1}")
+                        
+                        st.image(preview, width="stretch")
+                        
+                        st.button(
+                            f"Auswählen", 
+                            key=f"select_page_{i}",
+                            on_click=select_page,
+                            args=(i,),
+                            type="secondary"
+                        )
+            
+            # If page selected, show OCR config
+            if st.session_state.selected_page is not None:
+                if st.button("← Zurück zur Übersicht"):
+                    st.session_state.selected_page = None
+                    st.rerun()
+                
+                st.divider()
+                
+                page_idx = st.session_state.selected_page
+                
+                # Sidebar controls for OCR Tool
+                st.sidebar.header("🔧 OCR Tool Einstellungen")
+                
+                # Local threshold for this tool, defaulting to global setting
+                tool_bubble_threshold = st.sidebar.slider(
+                    "Bubble Grouping Distance (Test)", 
+                    min_value=30, 
+                    max_value=400, 
+                    value=st.session_state.bubble_threshold_setting, 
+                    step=10,
+                    help="Test-Wert für diesen Viewer. Ändert nicht die globale Einstellung."
+                )
+                
+                ocr_engine = st.sidebar.selectbox(
+                    "OCR Engine",
+                    options=['magi', 'manga-ocr', 'paddleocr', 'easyocr'],
+                    index=0,
+                    help="'magi' = beste für Manga (erkennt Sprechblasen), 'manga-ocr' = gut, 'paddleocr' = schnell"
+                )
+                
+                preprocess_mode = st.sidebar.selectbox(
+                    "OCR Preprocessing",
+                    options=['gentle', 'none', 'aggressive'],
+                    index=0,
+                    help="'gentle' = empfohlen für Manga, 'none' = Originalbild, 'aggressive' = starke Binarisierung"
+                )
+                
+                show_raw = st.sidebar.checkbox("Zeige Roh-OCR zum Vergleich", value=False)
+                
+                st.sidebar.divider()
+                st.sidebar.info("💡 **Tipps:**\n- Magi ist am besten für Manga\n- Gentle preprocessing empfohlen")
+                
+                # Load high-res image for selected page
+                cache_key = f"page_{page_idx}"
+                
+                if cache_key not in st.session_state.high_res_images:
+                    with st.spinner(f"Lade Seite {page_idx + 1} in hoher Auflösung..."):
+                        high_res = pdf_handler.extract_images_from_pdf(
+                            st.session_state.config_pdf_path, 
+                            pages=[page_idx], 
+                            zoom=2
+                        )
+                        if high_res:
+                            st.session_state.high_res_images[cache_key] = high_res[0]
+                
+                if cache_key in st.session_state.high_res_images:
+                    image = st.session_state.high_res_images[cache_key]
+                    
+                    # Run OCR (cached per page, engine, preprocess mode)
+                    ocr_key = f"ocr_{page_idx}_{ocr_engine}_{preprocess_mode}"
+                    if ocr_key not in st.session_state.ocr_cache:
+                        with st.spinner(f"🔍 Analysiere Text mit {ocr_engine.upper()}..."):
+                            # Lazy load OCR handler here to avoid circular imports if any
+                            from src.ocr_handler import OCRHandler
+                            ocr_handler_tool = OCRHandler(lang_list=['en'], gpu=False, ocr_engine=ocr_engine)
+                            
+                            raw_results = ocr_handler_tool.detect_text(
+                                image, 
+                                paragraph=False, 
+                                preprocess_mode=preprocess_mode
+                            )
+                            st.session_state.ocr_cache[ocr_key] = raw_results
+                    
+                    raw_results = st.session_state.ocr_cache[ocr_key]
+                    
+                    # Group with current threshold
+                    from src.ocr_handler import OCRHandler
+                    ocr_handler_tool = OCRHandler(lang_list=['en'], gpu=False, ocr_engine=ocr_engine)
+                    grouped_results = ocr_handler_tool.group_text_into_bubbles(raw_results, distance_threshold=tool_bubble_threshold)
+                    
+                    # Display
+                    st.subheader(f"📄 Seite {page_idx + 1} - OCR Ergebnis")
+                    
+                    if show_raw:
+                        col1, col2 = st.columns(2)
+                        
+                        with col1:
+                            st.markdown(f"**🔴 Roh-OCR: {len(raw_results)} Boxen**")
+                            raw_image = draw_boxes(image, raw_results)
+                            st.image(raw_image, width="stretch")
+                        
+                        with col2:
+                            st.markdown(f"**🟢 Gruppiert: {len(grouped_results)} Boxen** (Threshold: {tool_bubble_threshold}px)")
+                            grouped_image = draw_boxes(image, grouped_results)
+                            st.image(grouped_image, width="stretch")
+                    else:
+                        st.markdown(f"**🟢 Gruppiert: {len(grouped_results)} Boxen** (Threshold: {tool_bubble_threshold}px)")
+                        grouped_image = draw_boxes(image, grouped_results)
+                        st.image(grouped_image, width="stretch")
+                    
+                    # Show detected texts
+                    with st.expander(f"📝 Erkannte Texte ({len(grouped_results)} Gruppen)", expanded=True):
+                        for i, item in enumerate(grouped_results):
+                            text = item[1] if len(item) > 1 else ""
+                            colors = ["🔴", "🔵", "🟢", "🟠", "🟣", "🩵", "🩷", "🟡"]
+                            color = colors[i % len(colors)]
+                            st.markdown(f"{color} **[{i+1}]** {text}")
+                    
+                    # Stats
+                    st.divider()
+                    col_stat1, col_stat2, col_stat3 = st.columns(3)
+                    col_stat1.metric("Roh-Boxen", len(raw_results))
+                    col_stat2.metric("Gruppierte Boxen", len(grouped_results))
+                    reduction = 100 - (len(grouped_results) / max(len(raw_results), 1) * 100)
+                    col_stat3.metric("Reduktion", f"{reduction:.0f}%")
+
+    else:
+        st.info("👆 Lade ein PDF hoch um die OCR-Boxen zu konfigurieren.")
