@@ -11,6 +11,18 @@ from src.ocr_handler import OCRHandler
 from src.translator import TranslatorService
 from src.image_processor import ImageProcessor
 
+try:
+    import spaces
+except Exception:
+    class _GPUDecorator:
+        def __call__(self, fn):
+            return fn
+
+    class _SpacesFallback:
+        GPU = _GPUDecorator()
+
+    spaces = _SpacesFallback()
+
 # Fix SSL issues for HTTPS APIs (DeepL / OpenAI / xAI)
 os.environ["SSL_CERT_FILE"] = certifi.where()
 
@@ -69,6 +81,7 @@ def _build_translator(service_label: str, deepl_key: str, openai_key: str, xai_k
     return TranslatorService(source="en", target="de", service_type=service_type, api_key=api_key)
 
 
+@spaces.GPU
 def translate_manga(
     pdf_path: str,
     page_range: str,
