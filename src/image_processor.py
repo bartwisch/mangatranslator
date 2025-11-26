@@ -167,7 +167,13 @@ class ImageProcessor:
 
     def _load_font(self, fontsize: int):
         """Helper to load a font with fallback"""
-        font_names = ["Arial.ttf", "/System/Library/Fonts/Helvetica.ttc", "/System/Library/Fonts/Supplemental/Arial.ttf", "DejaVuSans.ttf"]
+        font_names = [
+            "Arial.ttf",  # generic name (Windows/macOS dev)
+            "/System/Library/Fonts/Helvetica.ttc",  # macOS
+            "/System/Library/Fonts/Supplemental/Arial.ttf",  # macOS supplemental
+            "/usr/share/fonts/truetype/dejavu/DejaVuSans.ttf",  # common Linux path (HF Spaces)
+            "DejaVuSans.ttf",  # fallback by font name
+        ]
         for name in font_names:
             try:
                 return ImageFont.truetype(name, fontsize)
