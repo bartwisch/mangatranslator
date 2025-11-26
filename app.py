@@ -272,7 +272,7 @@ def main():
                         
                         # Image with negative margin to pull it up closer
                         st.markdown('<div style="margin-top: -10px;"></div>', unsafe_allow_html=True)
-                        st.image(img, use_column_width=True)
+                        st.image(img, use_container_width=True)
                         
                         # Second toggle button below image (for clicking on image area)
                         # Using a minimal icon-only button
@@ -462,7 +462,7 @@ def main():
                         st.image(
                             p_img,
                             caption=f"Translated Page {selected_indices[i] + 1}",
-                            use_column_width=True,
+                            use_container_width=True,
                         )
                     
                     # Reset translation flags
