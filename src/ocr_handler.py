@@ -56,7 +56,12 @@ class OCRHandler:
                 from manga_ocr import MangaOcr
                 from paddleocr import PaddleOCR
                 self._manga_ocr = MangaOcr()
-                self._detector = PaddleOCR(lang='en')
+                # PaddleOCR 3.x API with minimal preprocessing for speed
+                self._detector = PaddleOCR(
+                    use_doc_orientation_classify=False,
+                    use_doc_unwarping=False,
+                    use_textline_orientation=False
+                )
                 print("✓ Manga-OCR loaded successfully")
             except ImportError:
                 raise ImportError(
@@ -72,7 +77,12 @@ class OCRHandler:
             print("Loading PaddleOCR...")
             try:
                 from paddleocr import PaddleOCR
-                self._paddle_reader = PaddleOCR(lang='en')
+                # PaddleOCR 3.x API with minimal preprocessing
+                self._paddle_reader = PaddleOCR(
+                    use_doc_orientation_classify=False,
+                    use_doc_unwarping=False,
+                    use_textline_orientation=False
+                )
                 print("✓ PaddleOCR loaded successfully")
             except ImportError:
                 raise ImportError(
@@ -222,19 +232,26 @@ class OCRHandler:
         if len(processed_image.shape) == 2:
             processed_image = np.stack([processed_image] * 3, axis=-1)
 
-        # Use PaddleOCR for detection, then manga-ocr for recognition
-        detection_result = detector.ocr(processed_image)
+        # PaddleOCR 3.x uses predict() and returns result objects
+        detection_results = list(detector.predict(processed_image))
         
         final_results = []
         
-        if detection_result and detection_result[0]:
-            for item in detection_result[0]:
-                # PaddleOCR returns [[bbox], (text, conf)] - we only need bbox
-                if isinstance(item[0], list) and isinstance(item[0][0], (list, tuple)):
-                    bbox_raw = item[0]  # [[x1,y1], [x2,y2], [x3,y3], [x4,y4]]
-                else:
-                    bbox_raw = item  # Already just bbox
+        for res in detection_results:
+            # Access the result dict - PaddleOCR 3.x returns objects with 'dt_polys' attribute
+            if hasattr(res, 'dt_polys') and res.dt_polys is not None:
+                dt_polys = res.dt_polys
+            elif hasattr(res, '__getitem__'):
+                # Try dict-like access
+                res_dict = res.get('res', res) if hasattr(res, 'get') else res
+                dt_polys = res_dict.get('dt_polys', None) if hasattr(res_dict, 'get') else None
+            else:
+                continue
+            
+            if dt_polys is None:
+                continue
                 
+            for bbox_raw in dt_polys:
                 pts = np.array(bbox_raw).astype(int)
                 x_min, y_min = pts.min(axis=0)
                 x_max, y_max = pts.max(axis=0)
@@ -267,7 +284,7 @@ class OCRHandler:
                 if not text.strip():
                     continue
                 
-                # Scale bbox back
+                # Scale bbox back - bbox_raw is already a polygon array
                 bbox = [[int(p[0]/scale_factor), int(p[1]/scale_factor)] for p in bbox_raw]
                 
                 final_results.append((bbox, text.strip(), 0.95))
@@ -282,16 +299,29 @@ class OCRHandler:
         if len(processed_image.shape) == 2:
             processed_image = np.stack([processed_image] * 3, axis=-1)
 
-        result = reader.ocr(processed_image)
+        # PaddleOCR 3.x uses predict() and returns result objects
+        results = list(reader.predict(processed_image))
         
         final_results = []
         
-        # PaddleOCR returns: [[[box], (text, confidence)], ...]
-        if result and result[0]:
-            for line in result[0]:
-                bbox_raw = line[0]  # [[x1,y1], [x2,y2], [x3,y3], [x4,y4]]
-                text = line[1][0]
-                confidence = line[1][1]
+        for res in results:
+            # PaddleOCR 3.x returns objects with rec_polys, rec_texts, rec_scores
+            rec_polys = getattr(res, 'rec_polys', None) or getattr(res, 'dt_polys', None)
+            rec_texts = getattr(res, 'rec_texts', None)
+            rec_scores = getattr(res, 'rec_scores', None)
+            
+            # Try dict-like access if attributes don't work
+            if rec_polys is None and hasattr(res, 'get'):
+                res_dict = res.get('res', res) if 'res' in res else res
+                rec_polys = res_dict.get('rec_polys') or res_dict.get('dt_polys')
+                rec_texts = res_dict.get('rec_texts')
+                rec_scores = res_dict.get('rec_scores')
+            
+            if rec_polys is None or rec_texts is None:
+                continue
+            
+            for i, (bbox_raw, text) in enumerate(zip(rec_polys, rec_texts)):
+                confidence = rec_scores[i] if rec_scores is not None and i < len(rec_scores) else 0.9
                 
                 # Skip empty or low confidence
                 if not text.strip() or confidence < 0.5:
@@ -300,7 +330,7 @@ class OCRHandler:
                 # Scale bbox back
                 bbox = [[int(p[0]/scale_factor), int(p[1]/scale_factor)] for p in bbox_raw]
                 
-                final_results.append((bbox, text.strip(), confidence))
+                final_results.append((bbox, text.strip(), float(confidence)))
         
         return final_results
     
