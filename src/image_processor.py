@@ -1,6 +1,7 @@
 from PIL import Image, ImageDraw, ImageFont
 import numpy as np
 from typing import List, Tuple
+import os
 
 class ImageProcessor:
     def __init__(self):
@@ -167,7 +168,11 @@ class ImageProcessor:
 
     def _load_font(self, fontsize: int):
         """Helper to load a font with fallback"""
+        # Prioritize bundled font
+        bundled_font_path = os.path.join(os.path.dirname(__file__), "fonts", "DejaVuSans.ttf")
+        
         font_names = [
+            bundled_font_path,
             "Arial.ttf",  # generic name (Windows/macOS dev)
             "/System/Library/Fonts/Helvetica.ttc",  # macOS
             "/System/Library/Fonts/Supplemental/Arial.ttf",  # macOS supplemental
