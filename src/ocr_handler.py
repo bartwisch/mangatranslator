@@ -219,7 +219,7 @@ class OCRHandler:
         manga_ocr, detector = self._load_manga_ocr()
         
         # Use PaddleOCR for detection, then manga-ocr for recognition
-        detection_result = detector.ocr(processed_image, cls=False)
+        detection_result = detector.ocr(processed_image)
         
         final_results = []
         
@@ -275,7 +275,7 @@ class OCRHandler:
         reader = self._load_paddleocr()
         
         # PaddleOCR expects BGR or RGB numpy array
-        result = reader.ocr(processed_image, cls=True)
+        result = reader.ocr(processed_image)
         
         final_results = []
         
