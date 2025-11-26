@@ -56,7 +56,7 @@ class OCRHandler:
                 from manga_ocr import MangaOcr
                 from paddleocr import PaddleOCR
                 self._manga_ocr = MangaOcr()
-                self._detector = PaddleOCR(lang='en', show_log=False)
+                self._detector = PaddleOCR(lang='en')
                 print("✓ Manga-OCR loaded successfully")
             except ImportError:
                 raise ImportError(
@@ -72,7 +72,7 @@ class OCRHandler:
             print("Loading PaddleOCR...")
             try:
                 from paddleocr import PaddleOCR
-                self._paddle_reader = PaddleOCR(lang='en', show_log=False)
+                self._paddle_reader = PaddleOCR(lang='en')
                 print("✓ PaddleOCR loaded successfully")
             except ImportError:
                 raise ImportError(
