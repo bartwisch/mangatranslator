@@ -1,5 +1,18 @@
+---
+title: Manga Translator
+emoji: 📚
+colorFrom: pink
+colorTo: purple
+sdk: streamlit
+sdk_version: 1.40.0
+app_file: app.py
+pinned: false
+license: mit
+---
+
 # 📚 Manga Translator
 
+[![Hugging Face Spaces](https://img.shields.io/badge/%F0%9F%A4%97%20Hugging%20Face-Spaces-blue)](https://huggingface.co/spaces/bartwisch/mangatranslator)
 [![Streamlit App](https://static.streamlit.io/badges/streamlit_badge_black_white.svg)](https://share.streamlit.io/)
 
 An AI-powered application to translate Manga/Comic PDFs from English to German. It preserves the original layout by detecting speech bubbles, removing the original text, and overlaying the translated text.
@@ -25,17 +38,31 @@ An AI-powered application to translate Manga/Comic PDFs from English to German. 
 *   **OCR Config Page**: Live preview to tune OCR parameters and bubble grouping.
 *   **Cost Estimation**: Shows token usage and estimated costs for AI models.
 
-## 🚀 How to Deploy on Streamlit Cloud
+## 🚀 Deployment
 
-This is the easiest way to run the app for free.
+### Hugging Face Spaces (Recommended)
 
-1.  Go to **[share.streamlit.io](https://share.streamlit.io/)**.
-2.  Click **"New App"**.
-3.  Select "Use existing repo" and enter: `bartwisch/mangatranslator`.
-4.  Set **Main file path** to `app.py`.
+Best option – provides **16 GB RAM** for free, which is needed for the OCR models.
+
+1.  Go to **[huggingface.co/spaces](https://huggingface.co/spaces)**
+2.  Click **"Create new Space"**
+3.  Select **Streamlit** as SDK
+4.  Clone this repo or link your GitHub repo
+5.  The app will auto-deploy using the YAML header in this README
+
+**Live Demo:** [huggingface.co/spaces/bartwisch/mangatranslator](https://huggingface.co/spaces/bartwisch/mangatranslator)
+
+### Streamlit Cloud (Limited RAM)
+
+Alternative with less RAM (~1 GB), may struggle with large PDFs.
+
+1.  Go to **[share.streamlit.io](https://share.streamlit.io/)**
+2.  Click **"New App"**
+3.  Select "Use existing repo" and enter: `bartwisch/mangatranslator`
+4.  Set **Main file path** to `app.py`
 5.  Click **Deploy!** 🎈
 
-*Note: The first deployment might take 3-5 minutes because it needs to install PyTorch and OCR models.*
+*Note: First deployment takes 3-5 minutes to install PyTorch and OCR models.*
 
 ## 🛠️ Local Installation
 
