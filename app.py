@@ -443,7 +443,7 @@ def main():
                 if debug_mode and all_text_data:
                     st.divider()
                     st.subheader("🐛 Debug: OCR & Translation Data")
-                    st.dataframe(all_text_data, width="stretch")
+                    st.dataframe(all_text_data, use_container_width=True)
                 
                 # Download Button
                 with open(output_pdf_path, "rb") as f:
@@ -459,7 +459,11 @@ def main():
                     st.divider()
                     st.markdown("### 👀 Preview (Processed Pages)")
                     for i, p_img in enumerate(processed_images):
-                        st.image(p_img, caption=f"Translated Page {selected_indices[i] + 1}", width="stretch")
+                        st.image(
+                            p_img,
+                            caption=f"Translated Page {selected_indices[i] + 1}",
+                            use_column_width=True,
+                        )
                     
                     # Reset translation flags
                     st.session_state.translation_in_progress = False
