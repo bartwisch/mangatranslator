@@ -3,9 +3,9 @@ title: Manga Translator
 emoji: 📚
 colorFrom: pink
 colorTo: purple
-sdk: streamlit
-sdk_version: 1.40.0
-app_file: app.py
+sdk: gradio
+sdk_version: 4.28.3
+app_file: gradio_app.py
 pinned: false
 license: mit
 ---
@@ -46,7 +46,7 @@ Best option – provides **16 GB RAM** for free, which is needed for the OCR mod
 
 1.  Go to **[huggingface.co/spaces](https://huggingface.co/spaces)**
 2.  Click **"Create new Space"**
-3.  Select **Streamlit** as SDK
+3.  Select **Gradio** as SDK
 4.  Clone this repo or link your GitHub repo
 5.  The app will auto-deploy using the YAML header in this README
 
