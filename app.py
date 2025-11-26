@@ -260,19 +260,29 @@ def main():
                         btn_label = f"✅ Page {i+1}" if is_selected else f"⬜ Page {i+1}"
                         btn_type = "primary" if is_selected else "secondary"
                         
-                        if st.button(btn_label, key=f"btn_{i}", type=btn_type, width="stretch"):
+                        if st.button(
+                            btn_label,
+                            key=f"btn_{i}",
+                            type=btn_type,
+                            use_container_width=True,
+                        ):
                             # Toggle state
                             st.session_state[key] = not is_selected
                             st.rerun()
                         
                         # Image with negative margin to pull it up closer
                         st.markdown('<div style="margin-top: -10px;"></div>', unsafe_allow_html=True)
-                        st.image(img, width="stretch")
+                        st.image(img, use_column_width=True)
                         
                         # Second toggle button below image (for clicking on image area)
                         # Using a minimal icon-only button
                         toggle_icon = "✓" if is_selected else "○"
-                        if st.button(toggle_icon, key=f"img_btn_{i}", width="stretch", help="Click to toggle selection"):
+                        if st.button(
+                            toggle_icon,
+                            key=f"img_btn_{i}",
+                            help="Click to toggle selection",
+                            use_container_width=True,
+                        ):
                             # Toggle state
                             st.session_state[key] = not is_selected
                             st.rerun()
