@@ -13,7 +13,7 @@ os.environ['SSL_CERT_FILE'] = certifi.where()
 
 st.set_page_config(page_title="Manga Translator", page_icon="logo.png")
 
-st.title("📚 Manga Translator (English -> German)")
+st.title("📚 Manga Translator (English -> DEUTSCH!)")
 
 @st.cache_resource
 def load_ocr(ocr_engine: str = 'magi'):
