@@ -16,7 +16,7 @@ st.set_page_config(page_title="Manga Translator", page_icon="logo.png")
 st.title("📚 Manga Translator (English -> DEUTSCH!)")
 
 @st.cache_resource
-def load_ocr(ocr_engine: str = 'magi'):
+def load_ocr(ocr_engine: str = 'manga-ocr'):
     # Magi is best for manga (detects speech bubbles + OCR)
     # manga-ocr is specialized for manga/comic fonts
     # PaddleOCR is good general purpose
@@ -77,7 +77,7 @@ def main():
     if 'bubble_threshold_setting' not in st.session_state:
         st.session_state.bubble_threshold_setting = 160
     if 'ocr_engine_selection' not in st.session_state:
-        st.session_state.ocr_engine_selection = "magi"
+        st.session_state.ocr_engine_selection = "manga-ocr"
     if 'ocr_preprocess_mode' not in st.session_state:
         st.session_state.ocr_preprocess_mode = "gentle"
     if 'stop_translation' not in st.session_state:

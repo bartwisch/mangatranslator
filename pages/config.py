@@ -40,7 +40,7 @@ if 'show_boxes_checkbox' not in st.session_state:
 if 'bubble_threshold_setting' not in st.session_state:
     st.session_state.bubble_threshold_setting = 160
 if 'ocr_engine_selection' not in st.session_state:
-    st.session_state.ocr_engine_selection = "magi"
+    st.session_state.ocr_engine_selection = "manga-ocr"
 if 'ocr_preprocess_mode' not in st.session_state:
     st.session_state.ocr_preprocess_mode = "gentle"
 
@@ -233,7 +233,7 @@ with tab_ocr_tool:
                 ocr_engine = st.sidebar.selectbox(
                     "OCR Engine",
                     options=['magi', 'manga-ocr', 'paddleocr', 'easyocr'],
-                    index=0,
+                    index=1,
                     help="'magi' = beste für Manga (erkennt Sprechblasen), 'manga-ocr' = gut, 'paddleocr' = schnell"
                 )
                 
