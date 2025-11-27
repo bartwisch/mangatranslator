@@ -446,26 +446,7 @@ def main():
                 else:
                     st.success("Translation Complete!")
 
-                # Display Cost Stats if available
-                if hasattr(translator, 'get_usage_stats'):
-                    stats = translator.get_usage_stats()
-                    if stats['input_tokens'] > 0:
-                        st.divider()
-                        st.subheader(" Cost & Usage Estimate")
-                        col_cost1, col_cost2, col_cost3 = st.columns(3)
-                        col_cost1.metric("Input Tokens", f"{stats['input_tokens']:,}")
-                        col_cost2.metric("Output Tokens", f"{stats['output_tokens']:,}")
-                        
-                        cost = translator.get_cost_estimate()
-                        col_cost3.metric("Estimated Cost", f"${cost:.4f}")
-                        st.caption("Note: Cost estimate based on GPT-4o-mini pricing ($0.15/$0.60 per 1M tokens).")
-
-                if debug_mode and all_text_data:
-                    st.divider()
-                    st.subheader(" Debug: OCR & Translation Data")
-                    st.dataframe(all_text_data, width="stretch")
-                
-                # Download Button
+                # Download Button & Preview (show results as early as possible)
                 with open(output_pdf_path, "rb") as f:
                     pdf_data = f.read()
                     st.download_button(
@@ -484,6 +465,25 @@ def main():
                             caption=f"Translated Page {selected_indices[i] + 1}",
                             width="stretch",
                         )
+
+                # Display Cost Stats if available (below the main result)
+                if hasattr(translator, 'get_usage_stats'):
+                    stats = translator.get_usage_stats()
+                    if stats['input_tokens'] > 0:
+                        st.divider()
+                        st.subheader(" Cost & Usage Estimate")
+                        col_cost1, col_cost2, col_cost3 = st.columns(3)
+                        col_cost1.metric("Input Tokens", f"{stats['input_tokens']:,}")
+                        col_cost2.metric("Output Tokens", f"{stats['output_tokens']:,}")
+                        
+                        cost = translator.get_cost_estimate()
+                        col_cost3.metric("Estimated Cost", f"${cost:.4f}")
+                        st.caption("Note: Cost estimate based on GPT-4o-mini pricing ($0.15/$0.60 per 1M tokens).")
+
+                if debug_mode and all_text_data:
+                    st.divider()
+                    st.subheader(" Debug: OCR & Translation Data")
+                    st.dataframe(all_text_data, width="stretch")
                     
                     # Reset translation flags
                     st.session_state.translation_in_progress = False
