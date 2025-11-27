@@ -437,7 +437,9 @@ def main():
 
                 language_part = "german"
                 output_pdf_name = f"{safe_base}-{page_part}-{language_part}.pdf"
-                output_pdf_path = output_pdf_name
+
+                # Always save to a fixed filename on disk so we don't accumulate many PDFs
+                output_pdf_path = "translated_manga.pdf"
                 pdf_handler.save_images_as_pdf(processed_images, output_pdf_path)
                 
                 # Check if translation was stopped
