@@ -6,7 +6,7 @@ from scipy.spatial.distance import cdist
 from scipy.cluster.hierarchy import fcluster, linkage
 
 class OCRHandler:
-    def __init__(self, lang_list: List[str] = ['en'], gpu: bool = False, ocr_engine: str = 'manga-ocr'):
+    def __init__(self, lang_list: List[str] = ['en'], gpu: bool = False, ocr_engine: str = 'magi'):
         """
         Initializes the OCR handler with lazy loading.
         

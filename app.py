@@ -77,7 +77,7 @@ def main():
     if 'bubble_threshold_setting' not in st.session_state:
         st.session_state.bubble_threshold_setting = 160
     if 'ocr_engine_selection' not in st.session_state:
-        st.session_state.ocr_engine_selection = "manga-ocr"
+        st.session_state.ocr_engine_selection = "magi"
     if 'ocr_preprocess_mode' not in st.session_state:
         st.session_state.ocr_preprocess_mode = "gentle"
     if 'stop_translation' not in st.session_state:
