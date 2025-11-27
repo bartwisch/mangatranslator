@@ -253,7 +253,7 @@ def main():
                         # Check selection state
                         key = f"page_select_{i}"
                         # Use False as default to prevent accidental selection
-                        # The key should always exist after upload (initialized in line 176-177)
+                        # The key should always exist after upload (initialized above)
                         is_selected = st.session_state.get(key, False)
                         
                         # Toggle Button (acts as header)
@@ -264,7 +264,7 @@ def main():
                             btn_label,
                             key=f"btn_{i}",
                             type=btn_type,
-                            use_container_width=True,
+                            width="stretch",
                         ):
                             # Toggle state
                             st.session_state[key] = not is_selected
@@ -272,7 +272,7 @@ def main():
                         
                         # Image with negative margin to pull it up closer
                         st.markdown('<div style="margin-top: -10px;"></div>', unsafe_allow_html=True)
-                        st.image(img, use_container_width=True)
+                        st.image(img, width="stretch")
                         
                         # Second toggle button below image (for clicking on image area)
                         # Using a minimal icon-only button
@@ -281,7 +281,7 @@ def main():
                             toggle_icon,
                             key=f"img_btn_{i}",
                             help="Click to toggle selection",
-                            use_container_width=True,
+                            width="stretch",
                         ):
                             # Toggle state
                             st.session_state[key] = not is_selected
@@ -317,7 +317,7 @@ def main():
                     if hasattr(translator, "validate_api_key"):
                         translator.validate_api_key()
                 except Exception as e:
-                    st.error(f"❌ API Key Error: {e}")
+                    st.error(f" API Key Error: {e}")
                 else:
                     # Set translation in progress flag
                     st.session_state.translation_in_progress = True
@@ -431,7 +431,7 @@ def main():
                     stats = translator.get_usage_stats()
                     if stats['input_tokens'] > 0:
                         st.divider()
-                        st.subheader("📊 Cost & Usage Estimate")
+                        st.subheader(" Cost & Usage Estimate")
                         col_cost1, col_cost2, col_cost3 = st.columns(3)
                         col_cost1.metric("Input Tokens", f"{stats['input_tokens']:,}")
                         col_cost2.metric("Output Tokens", f"{stats['output_tokens']:,}")
@@ -442,8 +442,8 @@ def main():
 
                 if debug_mode and all_text_data:
                     st.divider()
-                    st.subheader("🐛 Debug: OCR & Translation Data")
-                    st.dataframe(all_text_data, use_container_width=True)
+                    st.subheader(" Debug: OCR & Translation Data")
+                    st.dataframe(all_text_data, width="stretch")
                 
                 # Download Button
                 with open(output_pdf_path, "rb") as f:
@@ -457,12 +457,12 @@ def main():
                     
                     # Show Preview Images (More reliable than PDF iframe)
                     st.divider()
-                    st.markdown("### 👀 Preview (Processed Pages)")
+                    st.markdown("###  Preview (Processed Pages)")
                     for i, p_img in enumerate(processed_images):
                         st.image(
                             p_img,
                             caption=f"Translated Page {selected_indices[i] + 1}",
-                            use_container_width=True,
+                            width="stretch",
                         )
                     
                     # Reset translation flags

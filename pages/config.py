@@ -197,7 +197,7 @@ with tab_ocr_tool:
                     with cols[i % num_cols]:
                         st.markdown(f"Seite {i+1}")
                         
-                        st.image(preview, use_container_width=True)
+                        st.image(preview, width="stretch")
                         
                         st.button(
                             f"Auswählen", 
@@ -296,16 +296,16 @@ with tab_ocr_tool:
                         with col1:
                             st.markdown(f"**🔴 Roh-OCR: {len(raw_results)} Boxen**")
                             raw_image = draw_boxes(image, raw_results)
-                            st.image(raw_image, use_container_width=True)
+                            st.image(raw_image, width="stretch")
                         
                         with col2:
                             st.markdown(f"**🟢 Gruppiert: {len(grouped_results)} Boxen** (Threshold: {tool_bubble_threshold}px)")
                             grouped_image = draw_boxes(image, grouped_results)
-                            st.image(grouped_image, use_container_width=True)
+                            st.image(grouped_image, width="stretch")
                     else:
                         st.markdown(f"**🟢 Gruppiert: {len(grouped_results)} Boxen** (Threshold: {tool_bubble_threshold}px)")
                         grouped_image = draw_boxes(image, grouped_results)
-                        st.image(grouped_image, use_container_width=True)
+                        st.image(grouped_image, width="stretch")
                     
                     # Show detected texts
                     with st.expander(f"📝 Erkannte Texte ({len(grouped_results)} Gruppen)", expanded=True):
