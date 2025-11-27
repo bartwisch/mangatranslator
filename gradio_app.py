@@ -155,7 +155,27 @@ def translate_manga(
         processed_images.append(processed)
 
     tmp_dir = tempfile.mkdtemp(prefix="mangatranslator_")
-    output_pdf_path = os.path.join(tmp_dir, "translated_manga.pdf")
+
+    # Build dynamic output filename: <title>-pageX-Y-german.pdf
+    base_name = os.path.splitext(os.path.basename(pdf_path))[0]
+    safe_base = "".join(c if c.isalnum() or c in ["-", "_"] else "_" for c in base_name)
+
+    if pages is not None and len(pages) > 0:
+        first_page = pages[0] + 1
+        last_page = pages[-1] + 1
+    else:
+        first_page = 1
+        last_page = total
+
+    if first_page == last_page:
+        page_part = f"page{first_page}"
+    else:
+        page_part = f"page{first_page}-{last_page}"
+
+    language_part = "german"
+    output_pdf_name = f"{safe_base}-{page_part}-{language_part}.pdf"
+
+    output_pdf_path = os.path.join(tmp_dir, output_pdf_name)
 
     pdf_handler.save_images_as_pdf(processed_images, output_pdf_path)
 

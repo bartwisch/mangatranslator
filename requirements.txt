@@ -21,6 +21,3 @@ watchdog
 # Geometry / spatial dependencies used by Magi
 shapely
 
-manga-ocr
-paddlepaddle
-paddleocr

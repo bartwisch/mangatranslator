@@ -34,7 +34,7 @@ if 'stored_xai_key' not in st.session_state:
 if 'translation_service_selection' not in st.session_state:
     st.session_state.translation_service_selection = "OpenAI GPT-4o-mini (API Key - Recommended)"
 if 'debug_mode_checkbox' not in st.session_state:
-    st.session_state.debug_mode_checkbox = True
+    st.session_state.debug_mode_checkbox = False
 if 'show_boxes_checkbox' not in st.session_state:
     st.session_state.show_boxes_checkbox = False
 if 'bubble_threshold_setting' not in st.session_state:

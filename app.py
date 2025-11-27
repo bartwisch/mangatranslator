@@ -71,7 +71,7 @@ def main():
     if 'translation_service_selection' not in st.session_state:
         st.session_state.translation_service_selection = "OpenAI GPT-4o-mini (API Key - Recommended)"
     if 'debug_mode_checkbox' not in st.session_state:
-        st.session_state.debug_mode_checkbox = True
+        st.session_state.debug_mode_checkbox = False
     if 'show_boxes_checkbox' not in st.session_state:
         st.session_state.show_boxes_checkbox = False
     if 'bubble_threshold_setting' not in st.session_state:
@@ -416,8 +416,28 @@ def main():
                     st.session_state.translation_in_progress = False
                     st.session_state.stop_translation = False
                     return
-                
-                output_pdf_path = "translated_manga.pdf"
+
+                # Build dynamic output filename: <title>-pageX-Y-german.pdf
+                base_name = "translated_manga"
+                if uploaded_file is not None and getattr(uploaded_file, "name", None):
+                    base_name = os.path.splitext(uploaded_file.name)[0]
+
+                # Sanitize base name for filesystem safety
+                safe_base = "".join(c if c.isalnum() or c in ["-", "_"] else "_" for c in base_name)
+
+                if selected_indices:
+                    first_page = selected_indices[0] + 1
+                    last_page = selected_indices[-1] + 1
+                    if first_page == last_page:
+                        page_part = f"page{first_page}"
+                    else:
+                        page_part = f"page{first_page}-{last_page}"
+                else:
+                    page_part = "pages"
+
+                language_part = "german"
+                output_pdf_name = f"{safe_base}-{page_part}-{language_part}.pdf"
+                output_pdf_path = output_pdf_name
                 pdf_handler.save_images_as_pdf(processed_images, output_pdf_path)
                 
                 # Check if translation was stopped
@@ -451,7 +471,7 @@ def main():
                     st.download_button(
                         label="Download Translated PDF",
                         data=pdf_data,
-                        file_name="translated_manga.pdf",
+                        file_name=output_pdf_name,
                         mime="application/pdf"
                     )
                     
