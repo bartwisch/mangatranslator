@@ -16,9 +16,9 @@ st.set_page_config(page_title="Manga Translator", page_icon="logo.png")
 st.title("📚 Manga Translator (English -> DEUTSCH!)")
 
 @st.cache_resource
-def load_ocr(ocr_engine: str = 'manga-ocr'):
+def load_ocr(ocr_engine: str = 'magi'):
     # Magi is best for manga (detects speech bubbles + OCR)
-    # manga-ocr is specialized for manga/comic fonts
+    # manga-ocr is specialized for manga/comic fonts (experimental, optional)
     # PaddleOCR is good general purpose
     return OCRHandler(lang_list=['en'], gpu=False, ocr_engine=ocr_engine)
 

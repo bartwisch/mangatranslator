@@ -103,7 +103,7 @@ with tab_ocr_tool:
             "OCR Engine",
             options=['magi', 'manga-ocr', 'paddleocr', 'easyocr'],
             key='ocr_engine_selection',
-            help="'magi' = best for manga (detects speech bubbles) [DEFAULT], 'manga-ocr' = specialized for manga fonts, 'paddleocr' = fast and general purpose, 'easyocr' = multi-language support"
+            help="'magi' = best for manga (detects speech bubbles) [DEFAULT], 'manga-ocr' = specialized for manga fonts (experimental, optional), 'paddleocr' = fast and general purpose, 'easyocr' = multi-language support"
         )
     
     with col_ocr2:
@@ -233,8 +233,8 @@ with tab_ocr_tool:
                 ocr_engine = st.sidebar.selectbox(
                     "OCR Engine",
                     options=['magi', 'manga-ocr', 'paddleocr', 'easyocr'],
-                    index=1,
-                    help="'magi' = beste für Manga (erkennt Sprechblasen), 'manga-ocr' = gut, 'paddleocr' = schnell"
+                    index=0,
+                    help="'magi' = beste für Manga (erkennt Sprechblasen) [STANDARD], 'manga-ocr' = experimentell für Manga-Fonts (optional), 'paddleocr' = schnell"
                 )
                 
                 preprocess_mode = st.sidebar.selectbox(

@@ -185,7 +185,7 @@ with gr.Blocks() as demo:
             ocr_engine = gr.Radio(
                 label="OCR-Engine",
                 choices=["magi", "manga-ocr", "paddleocr", "easyocr"],
-                value="manga-ocr",
+                value="magi",
             )
             preprocess_mode = gr.Radio(
                 label="OCR Preprocessing",
