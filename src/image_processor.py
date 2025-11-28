@@ -267,9 +267,9 @@ class ImageProcessor:
                 pass
             
             # Nutze die Bubble-Größe für die Text-Berechnung (größerer Text!)
-            # Aber mit etwas Rand, damit der Text nicht an den Rand stößt
-            available_width = int(bubble_width * 0.85)
-            available_height = int(bubble_height * 0.85)
+            # Nutze fast den gesamten Bubble-Bereich
+            available_width = int(bubble_width * 0.92)
+            available_height = int(bubble_height * 0.92)
             
             # Berechne die Text-Größe basierend auf verfügbarem Bubble-Platz
             text_info = self._calculate_text_size(draw, translated, available_width, available_height)
@@ -331,11 +331,20 @@ class ImageProcessor:
         text = str(text)
         
         min_fontsize = 10
-        # Starte mit einer großen Schrift basierend auf der Box-Größe
-        # Faustregel: Schriftgröße ~ Höhe / 2 für einzeiligen Text
-        start_fontsize = min(60, max(20, int(max_h * 0.6)))
+        # Starte mit einer GROSSEN Schrift - so groß wie die Box es erlaubt
+        # Für kurze Texte kann die Schrift sehr groß sein
+        word_count = len(text.split())
+        if word_count <= 3:
+            # Kurzer Text: versuche sehr große Schrift
+            start_fontsize = min(120, max(40, int(max_h * 0.8)))
+        elif word_count <= 8:
+            # Mittlerer Text
+            start_fontsize = min(100, max(30, int(max_h * 0.6)))
+        else:
+            # Langer Text
+            start_fontsize = min(80, max(24, int(max_h * 0.5)))
         
-        padding = 6
+        padding = 4
         available_w = max(1, max_w - 2*padding)
         available_h = max(1, max_h - 2*padding)
         
