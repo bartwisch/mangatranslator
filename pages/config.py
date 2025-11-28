@@ -47,8 +47,10 @@ if 'pdf_zoom_factor' not in st.session_state:
     st.session_state.pdf_zoom_factor = 2.0
 if 'ocr_confidence_threshold' not in st.session_state:
     st.session_state.ocr_confidence_threshold = 0.4
-if 'box_padding_setting' not in st.session_state:
-    st.session_state.box_padding_setting = 30
+if 'box_padding_x' not in st.session_state:
+    st.session_state.box_padding_x = 40
+if 'box_padding_y' not in st.session_state:
+    st.session_state.box_padding_y = 40
 
 # Create tabs for different configuration sections
 tab_general, tab_ocr_tool = st.tabs(["🌍 General Settings", "🔧 OCR Tool"])
@@ -116,12 +118,21 @@ with tab_general:
         )
         
         st.slider(
-            "Box Padding (Global)",
+            "Box Padding X (Global)",
             min_value=-10,
             max_value=50,
             step=1,
-            key="box_padding_setting",
-            help="Vergrößert (>0) oder verkleinert (<0) die erkannten Boxen um X Pixel."
+            key="box_padding_x",
+            help="Vergrößert (>0) oder verkleinert (<0) die erkannten Boxen horizontal (links/rechts)."
+        )
+        
+        st.slider(
+            "Box Padding Y (Global)",
+            min_value=-10,
+            max_value=50,
+            step=1,
+            key="box_padding_y",
+            help="Vergrößert (>0) oder verkleinert (<0) die erkannten Boxen vertikal (oben/unten)."
         )
 
 with tab_ocr_tool:
@@ -164,7 +175,7 @@ with tab_ocr_tool:
         st.metric("Confidence Threshold", f"{st.session_state.ocr_confidence_threshold:.2f}")
     
     with col_settings4:
-        st.metric("Box Padding", f"{st.session_state.box_padding_setting}px")
+        st.metric("Box Padding", f"X:{st.session_state.box_padding_x}px Y:{st.session_state.box_padding_y}px")
     
     st.divider()
     st.subheader("📄 Test OCR on PDF Pages")
@@ -297,11 +308,13 @@ with tab_ocr_tool:
                 )
                 
                 show_raw = st.sidebar.checkbox("Zeige Roh-OCR zum Vergleich", value=False)
+                show_translation_preview = st.sidebar.checkbox("Zeige Übersetzungs-Vorschau", value=False, help="Zeigt wie der übersetzte Text aussehen würde (mit weißem Hintergrund)")
                 
                 # New Test Controls
                 st.sidebar.markdown("---")
                 test_conf = st.sidebar.slider("Min Confidence", 0.0, 1.0, st.session_state.ocr_confidence_threshold, 0.05)
-                test_padding = st.sidebar.slider("Box Padding", -10, 20, st.session_state.box_padding_setting, 1)
+                test_padding_x = st.sidebar.slider("Box Padding X", -10, 50, st.session_state.box_padding_x, 1, help="Horizontal (links/rechts)")
+                test_padding_y = st.sidebar.slider("Box Padding Y", -10, 50, st.session_state.box_padding_y, 1, help="Vertikal (oben/unten)")
                 
                 st.sidebar.divider()
                 st.sidebar.info("💡 **Tipps:**\n- Magi ist am besten für Manga\n- Gentle preprocessing empfohlen")
@@ -337,7 +350,8 @@ with tab_ocr_tool:
                                 paragraph=False, 
                                 preprocess_mode=preprocess_mode,
                                 confidence_threshold=0.0,
-                                box_padding=0
+                                box_padding_x=0,
+                                box_padding_y=0
                             )
                             st.session_state.ocr_cache[ocr_key] = raw_results
                     
@@ -358,7 +372,8 @@ with tab_ocr_tool:
                     filtered_results = ocr_handler_tool.filter_results(
                         cached_raw_results, 
                         confidence_threshold=test_conf, 
-                        box_padding=test_padding,
+                        box_padding_x=test_padding_x,
+                        box_padding_y=test_padding_y,
                         image_shape=img_array.shape[:2]
                     )
                     
@@ -373,7 +388,46 @@ with tab_ocr_tool:
                     # Display
                     st.subheader(f"📄 Seite {page_idx + 1} - OCR Ergebnis")
                     
-                    if show_raw:
+                    # Translation Preview Mode
+                    if show_translation_preview:
+                        st.markdown(f"**🎨 Übersetzungs-Vorschau: {len(grouped_results)} Boxen** (Padding: X={test_padding_x}px, Y={test_padding_y}px)")
+                        
+                        # Import translator and image processor
+                        from src.translator import TranslatorService
+                        from src.image_processor import ImageProcessor
+                        
+                        # Get API key from session state
+                        api_key = st.session_state.get('stored_openai_key', '')
+                        
+                        if not api_key:
+                            st.warning("⚠️ Kein OpenAI API Key gefunden. Bitte in den Einstellungen eingeben.")
+                            # Show boxes instead
+                            preview_image = draw_boxes(image, grouped_results)
+                            st.image(preview_image, width="stretch")
+                        else:
+                            with st.spinner("Übersetze Text..."):
+                                try:
+                                    translator = TranslatorService(source='en', target='de', service_type='openai', api_key=api_key)
+                                    image_processor = ImageProcessor()
+                                    
+                                    # Prepare text regions for translation
+                                    text_regions = []
+                                    for bbox, text in grouped_results:
+                                        if len(text.strip()) >= 2:
+                                            translated = translator.translate_text(text)
+                                            text_regions.append((bbox, text, translated))
+                                    
+                                    # Create preview with translation overlay
+                                    preview_image = image_processor.overlay_text(image.copy(), text_regions)
+                                    st.image(preview_image, width="stretch")
+                                    
+                                except Exception as e:
+                                    st.error(f"Übersetzungsfehler: {e}")
+                                    # Fallback to boxes
+                                    preview_image = draw_boxes(image, grouped_results)
+                                    st.image(preview_image, width="stretch")
+                    
+                    elif show_raw:
                         col1, col2 = st.columns(2)
                         
                         with col1:

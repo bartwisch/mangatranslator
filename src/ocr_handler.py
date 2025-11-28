@@ -151,7 +151,7 @@ class OCRHandler:
             
             return binary
 
-    def detect_text(self, image: Union[Image.Image, np.ndarray], paragraph: bool = True, preprocess_mode: str = 'gentle', tesseract_psm: int = 6, tesseract_confidence: int = 60, confidence_threshold: float = 0.0, box_padding: int = 0) -> List[Tuple[List[Tuple[int, int]], str]]:
+    def detect_text(self, image: Union[Image.Image, np.ndarray], paragraph: bool = True, preprocess_mode: str = 'gentle', tesseract_psm: int = 6, tesseract_confidence: int = 60, confidence_threshold: float = 0.0, box_padding_x: int = 0, box_padding_y: int = 0) -> List[Tuple[List[Tuple[int, int]], str]]:
         """
         Detects text in an image.
         
@@ -160,7 +160,8 @@ class OCRHandler:
             paragraph: If True, combines text lines into paragraphs (better for translation).
             preprocess_mode: Preprocessing mode ('gentle', 'none', 'aggressive', 'raw').
             confidence_threshold: Minimum confidence score (0.0-1.0) to keep a text box.
-            box_padding: Pixels to expand/shrink the bounding box.
+            box_padding_x: Pixels to expand/shrink the bounding box horizontally.
+            box_padding_y: Pixels to expand/shrink the bounding box vertically.
             
         Returns:
             List of tuples: (bounding_box, text) or (bounding_box, text, confidence)
@@ -192,16 +193,17 @@ class OCRHandler:
             raise ValueError(f"Unknown OCR engine: {self.ocr_engine}")
 
         # Apply filtering and padding
-        return self.filter_results(results, confidence_threshold, box_padding, image.shape[:2])
+        return self.filter_results(results, confidence_threshold, box_padding_x, box_padding_y, image.shape[:2])
 
-    def filter_results(self, results: List[Tuple], confidence_threshold: float, box_padding: int, image_shape: Tuple[int, int]) -> List[Tuple]:
+    def filter_results(self, results: List[Tuple], confidence_threshold: float, box_padding_x: int, box_padding_y: int, image_shape: Tuple[int, int]) -> List[Tuple]:
         """
         Applies confidence filtering and box padding to OCR results.
         
         Args:
             results: List of (bbox, text, [confidence]) tuples.
             confidence_threshold: Minimum confidence to keep.
-            box_padding: Pixels to expand/shrink boxes.
+            box_padding_x: Pixels to expand/shrink boxes horizontally.
+            box_padding_y: Pixels to expand/shrink boxes vertically.
             image_shape: (height, width) of the image for boundary checks.
             
         Returns:
@@ -223,7 +225,7 @@ class OCRHandler:
                 continue
                 
             # Apply padding if needed
-            if box_padding != 0:
+            if box_padding_x != 0 or box_padding_y != 0:
                 pts = np.array(bbox)
                 # Simple expansion of min/max is safer for rectangles
                 x_min = np.min(pts[:, 0])
@@ -231,10 +233,10 @@ class OCRHandler:
                 x_max = np.max(pts[:, 0])
                 y_max = np.max(pts[:, 1])
                 
-                x_min = max(0, x_min - box_padding)
-                y_min = max(0, y_min - box_padding)
-                x_max = min(img_w, x_max + box_padding)
-                y_max = min(img_h, y_max + box_padding)
+                x_min = max(0, x_min - box_padding_x)
+                y_min = max(0, y_min - box_padding_y)
+                x_max = min(img_w, x_max + box_padding_x)
+                y_max = min(img_h, y_max + box_padding_y)
                 
                 bbox = [[x_min, y_min], [x_max, y_min], [x_max, y_max], [x_min, y_max]]
             
@@ -536,7 +538,7 @@ class OCRHandler:
         
         return merged_results
 
-    def detect_and_group_text(self, image: Union[Image.Image, np.ndarray], distance_threshold: float = 50, preprocess_mode: str = 'gentle', confidence_threshold: float = 0.0, box_padding: int = 0) -> List[Tuple[List[List[int]], str]]:
+    def detect_and_group_text(self, image: Union[Image.Image, np.ndarray], distance_threshold: float = 50, preprocess_mode: str = 'gentle', confidence_threshold: float = 0.0, box_padding_x: int = 0, box_padding_y: int = 0) -> List[Tuple[List[List[int]], str]]:
         """
         Erkennt Text und gruppiert ihn automatisch nach Sprechblasen.
         
@@ -545,7 +547,8 @@ class OCRHandler:
             distance_threshold: Maximaler Abstand für Gruppierung (in Pixeln).
             preprocess_mode: Preprocessing mode ('gentle', 'none', 'aggressive', 'raw').
             confidence_threshold: Minimum confidence score.
-            box_padding: Padding for bounding boxes.
+            box_padding_x: Horizontal padding for bounding boxes.
+            box_padding_y: Vertical padding for bounding boxes.
             
         Returns:
             Liste von (bbox, combined_text) Tupeln, gruppiert nach Sprechblasen.
@@ -557,7 +560,8 @@ class OCRHandler:
             paragraph=False, 
             preprocess_mode=preprocess_mode,
             confidence_threshold=confidence_threshold,
-            box_padding=box_padding
+            box_padding_x=box_padding_x,
+            box_padding_y=box_padding_y
         )
         
         # Dann nach räumlicher Nähe gruppieren

@@ -84,8 +84,10 @@ def main():
         st.session_state.pdf_zoom_factor = 2.0
     if 'ocr_confidence_threshold' not in st.session_state:
         st.session_state.ocr_confidence_threshold = 0.4
-    if 'box_padding_setting' not in st.session_state:
-        st.session_state.box_padding_setting = 30
+    if 'box_padding_x' not in st.session_state:
+        st.session_state.box_padding_x = 40
+    if 'box_padding_y' not in st.session_state:
+        st.session_state.box_padding_y = 40
     if 'stop_translation' not in st.session_state:
         st.session_state.stop_translation = False
 
@@ -98,7 +100,8 @@ def main():
     ocr_preprocess = st.session_state.ocr_preprocess_mode
     pdf_zoom = st.session_state.pdf_zoom_factor
     ocr_confidence = st.session_state.ocr_confidence_threshold
-    box_padding = st.session_state.box_padding_setting
+    box_padding_x = st.session_state.box_padding_x
+    box_padding_y = st.session_state.box_padding_y
 
     pdf_handler = PDFHandler()
     image_processor = ImageProcessor()
@@ -396,7 +399,8 @@ def main():
                             distance_threshold=bubble_threshold,
                             preprocess_mode=ocr_preprocess,
                             confidence_threshold=ocr_confidence,
-                            box_padding=box_padding
+                            box_padding_x=box_padding_x,
+                            box_padding_y=box_padding_y
                         )
                         
                         for bbox, text in ocr_results:
