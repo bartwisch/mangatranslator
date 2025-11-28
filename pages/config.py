@@ -58,6 +58,12 @@ if 'box_padding_x' not in st.session_state:
 if 'box_padding_y' not in st.session_state:
     st.session_state.box_padding_y = 10
 
+# Ensure config page starts with known defaults the first time it's opened
+if 'config_initialized' not in st.session_state:
+    st.session_state.box_padding_x = 30
+    st.session_state.box_padding_y = 10
+    st.session_state.config_initialized = True
+
 # Create tabs for different configuration sections
 tab_general, tab_ocr_tool = st.tabs(["🌍 General Settings", "🔧 OCR Tool"])
 

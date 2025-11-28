@@ -61,6 +61,8 @@ class ImageProcessor:
         """
         draw = ImageDraw.Draw(image)
         img_w, img_h = image.size
+        # Convert once to numpy for background color sampling
+        img_array = np.array(image)
         
         for bbox, original, translated in text_regions:
             # Calculate bounding rectangle
@@ -76,23 +78,51 @@ class ImageProcessor:
                 y_min = max(0, y_min - ellipse_padding_y)
                 x_max = min(img_w, x_max + ellipse_padding_x)
                 y_max = min(img_h, y_max + ellipse_padding_y)
+
+            # Sample background brightness inside the (padded) region to decide
+            # whether the bubble is dark or light.
+            bubble_fill = "white"
+            text_color = "black"
+            try:
+                region = img_array[y_min:y_max, x_min:x_max]
+                if region.size > 0:
+                    # Use luminance (Y) from RGB
+                    if region.shape[-1] >= 3:
+                        r = region[..., 0].astype(np.float32)
+                        g = region[..., 1].astype(np.float32)
+                        b = region[..., 2].astype(np.float32)
+                        luma = 0.299 * r + 0.587 * g + 0.114 * b
+                    else:
+                        # Grayscale image
+                        luma = region.astype(np.float32)
+
+                    mean_luma = float(luma.mean()) / 255.0
+
+                    # Threshold: <0.5 => dark bubble
+                    if mean_luma < 0.5:
+                        bubble_fill = "#111111"
+                        text_color = "white"
+            except Exception:
+                # Fallback to default colors if anything goes wrong
+                bubble_fill = "white"
+                text_color = "black"
             
-            # Draw white background (inpainting) as ellipse or rectangle
+            # Draw background (inpainting) as ellipse or rectangle
             if use_ellipse:
-                draw.ellipse([x_min, y_min, x_max, y_max], fill="white", outline="white")
+                draw.ellipse([x_min, y_min, x_max, y_max], fill=bubble_fill, outline=bubble_fill)
             else:
-                draw.rectangle([x_min, y_min, x_max, y_max], fill="white", outline="white")
+                draw.rectangle([x_min, y_min, x_max, y_max], fill=bubble_fill, outline=bubble_fill)
             
             # Calculate box dimensions
             box_width = x_max - x_min
             box_height = y_max - y_min
             
-            # Draw text
-            self._draw_text_in_box(draw, translated, x_min, y_min, box_width, box_height)
+            # Draw text with chosen color
+            self._draw_text_in_box(draw, translated, x_min, y_min, box_width, box_height, text_color=text_color)
             
         return image
 
-    def _draw_text_in_box(self, draw: ImageDraw.ImageDraw, text: str, x: int, y: int, w: int, h: int):
+    def _draw_text_in_box(self, draw: ImageDraw.ImageDraw, text: str, x: int, y: int, w: int, h: int, text_color: str = "black"):
         """\n         Fits text inside a box by iteratively reducing font size and wrapping.
         """
         import textwrap
@@ -181,8 +211,8 @@ class ImageProcessor:
         max_x = x + w - padding - final_w
         center_x = max(min_x, min(center_x, max_x))
         
-        # Draw text (black)
-        draw.multiline_text((center_x, center_y), best_wrapped_text, fill="black", font=best_font, align="center")
+        # Draw text in chosen color
+        draw.multiline_text((center_x, center_y), best_wrapped_text, fill=text_color, font=best_font, align="center")
 
     def _load_font(self, fontsize: int):
         """Helper to load a font with fallback"""
