@@ -40,9 +40,9 @@ if 'show_boxes_checkbox' not in st.session_state:
 if 'use_ellipse_bubbles' not in st.session_state:
     st.session_state.use_ellipse_bubbles = True
 if 'ellipse_padding_x' not in st.session_state:
-    st.session_state.ellipse_padding_x = 28
+    st.session_state.ellipse_padding_x = 15
 if 'ellipse_padding_y' not in st.session_state:
-    st.session_state.ellipse_padding_y = 28
+    st.session_state.ellipse_padding_y = 15
 if 'bubble_threshold_setting' not in st.session_state:
     st.session_state.bubble_threshold_setting = 160
 if 'ocr_engine_selection' not in st.session_state:
@@ -159,23 +159,24 @@ with tab_ocr_tool:
         st.checkbox("Debug Mode", help="Show OCR text vs. Translation table.", key="debug_mode_checkbox")
         st.checkbox("Show OCR Boxes", help="Zeigt nur die erkannten Textbereiche als Rahmen.", key="show_boxes_checkbox")
         st.checkbox("Elliptical Bubbles", help="Nutze Ellipsen statt Rechtecken für übersetzte Textblasen.", key="use_ellipse_bubbles")
+        st.info("💡 **Bubble-Erkennung:** Die Textboxen werden jetzt automatisch auf die tatsächliche Sprechblasen-Größe begrenzt.")
     
     with dbg_col2:
         st.slider(
-            "Ellipse Padding X",
+            "Max Ellipse Padding X",
             min_value=0,
             max_value=80,
             step=1,
             key="ellipse_padding_x",
-            help="Zusätzliches horizontales Padding für Ellipsen-Sprechblasen (links/rechts).",
+            help="Maximales horizontales Padding (wird durch Bubble-Erkennung begrenzt).",
         )
         st.slider(
-            "Ellipse Padding Y",
+            "Max Ellipse Padding Y",
             min_value=0,
             max_value=80,
             step=1,
             key="ellipse_padding_y",
-            help="Zusätzliches vertikales Padding für Ellipsen-Sprechblasen (oben/unten).",
+            help="Maximales vertikales Padding (wird durch Bubble-Erkennung begrenzt).",
         )
         st.slider(
             "Bubble Grouping Distance (Global)", 

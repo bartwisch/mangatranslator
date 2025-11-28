@@ -100,9 +100,9 @@ def main():
     if 'use_ellipse_bubbles' not in st.session_state:
         st.session_state.use_ellipse_bubbles = True
     if 'ellipse_padding_x' not in st.session_state:
-        st.session_state.ellipse_padding_x = 28
+        st.session_state.ellipse_padding_x = 15
     if 'ellipse_padding_y' not in st.session_state:
-        st.session_state.ellipse_padding_y = 28
+        st.session_state.ellipse_padding_y = 15
     if 'bubble_threshold_setting' not in st.session_state:
         st.session_state.bubble_threshold_setting = 160
     if 'ocr_engine_selection' not in st.session_state:
@@ -133,8 +133,8 @@ def main():
     debug_mode = st.session_state.debug_mode_checkbox
     show_boxes = st.session_state.show_boxes_checkbox
     use_ellipse_bubbles = st.session_state.get('use_ellipse_bubbles', True)
-    ellipse_padding_x = st.session_state.get('ellipse_padding_x', 28)
-    ellipse_padding_y = st.session_state.get('ellipse_padding_y', 28)
+    ellipse_padding_x = st.session_state.get('ellipse_padding_x', 15)
+    ellipse_padding_y = st.session_state.get('ellipse_padding_y', 15)
     bubble_threshold = st.session_state.bubble_threshold_setting
     ocr_engine = st.session_state.ocr_engine_selection
     ocr_preprocess = st.session_state.ocr_preprocess_mode

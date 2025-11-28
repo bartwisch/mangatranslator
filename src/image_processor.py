@@ -1,11 +1,142 @@
 from PIL import Image, ImageDraw, ImageFont
 import numpy as np
-from typing import List, Tuple
+import cv2
+from typing import List, Tuple, Optional
 import os
 
 class ImageProcessor:
     def __init__(self):
         pass
+
+    def _find_bubble_contour(self, img_array: np.ndarray, x_min: int, y_min: int, x_max: int, y_max: int, margin: int = 30) -> Optional[np.ndarray]:
+        """
+        Findet die Kontur der Sprechblase, die den erkannten Textbereich enthält.
+        
+        Die Methode sucht nach weißen/hellen Bereichen um die Textbox und findet
+        die passende Sprechblasen-Kontur.
+        
+        Args:
+            img_array: Bild als numpy array (RGB).
+            x_min, y_min, x_max, y_max: Bounding Box des erkannten Textes.
+            margin: Suchbereich um die Textbox in Pixeln.
+            
+        Returns:
+            Kontur als numpy array oder None wenn keine gefunden.
+        """
+        h, w = img_array.shape[:2]
+        
+        # Erweitere den Suchbereich um die Textbox
+        search_x1 = max(0, x_min - margin)
+        search_y1 = max(0, y_min - margin)
+        search_x2 = min(w, x_max + margin)
+        search_y2 = min(h, y_max + margin)
+        
+        # Extrahiere den Suchbereich
+        region = img_array[search_y1:search_y2, search_x1:search_x2]
+        
+        if region.size == 0:
+            return None
+        
+        # Konvertiere zu Graustufen
+        if len(region.shape) == 3:
+            gray = cv2.cvtColor(region, cv2.COLOR_RGB2GRAY)
+        else:
+            gray = region
+        
+        # Binarisiere - Sprechblasen sind typischerweise weiß (>200)
+        # Wir suchen nach hellen Bereichen
+        _, binary = cv2.threshold(gray, 200, 255, cv2.THRESH_BINARY)
+        
+        # Finde Konturen
+        contours, _ = cv2.findContours(binary, cv2.RETR_EXTERNAL, cv2.CHAIN_APPROX_SIMPLE)
+        
+        if not contours:
+            return None
+        
+        # Berechne den Mittelpunkt der Textbox relativ zum Suchbereich
+        text_center_x = (x_min + x_max) // 2 - search_x1
+        text_center_y = (y_min + y_max) // 2 - search_y1
+        text_width = x_max - x_min
+        text_height = y_max - y_min
+        text_area = text_width * text_height
+        
+        # Finde die Kontur, die den Textmittelpunkt enthält
+        best_contour = None
+        best_score = float('inf')
+        
+        for contour in contours:
+            # Prüfe ob der Textmittelpunkt in der Kontur liegt
+            if cv2.pointPolygonTest(contour, (text_center_x, text_center_y), False) >= 0:
+                # Berechne die Fläche der Kontur
+                area = cv2.contourArea(contour)
+                
+                # Die Kontur sollte mindestens so groß wie der Text sein,
+                # aber nicht zu groß (max 10x Textfläche)
+                if area >= text_area * 0.5 and area <= text_area * 15:
+                    # Bevorzuge Konturen die näher an der Textgröße sind
+                    # Score = Verhältnis von Konturfläche zu Textfläche
+                    score = abs(area / text_area - 2.0)  # Ideale Blase ist ~2x Textfläche
+                    
+                    if score < best_score:
+                        best_score = score
+                        best_contour = contour
+        
+        if best_contour is not None:
+            # Verschiebe die Kontur zurück zu globalen Koordinaten
+            best_contour = best_contour + np.array([search_x1, search_y1])
+            return best_contour
+        
+        return None
+
+    def _get_bubble_bounds(self, img_array: np.ndarray, x_min: int, y_min: int, x_max: int, y_max: int, padding_x: int = 0, padding_y: int = 0) -> Tuple[int, int, int, int]:
+        """
+        Ermittelt die Grenzen der Sprechblase, begrenzt auf die tatsächliche Bubble-Kontur.
+        
+        Falls keine Bubble erkannt wird, wird das ursprüngliche Padding verwendet,
+        aber mit einer maximalen Grenze.
+        
+        Returns:
+            Tuple (x_min, y_min, x_max, y_max) der Bubble-Grenzen.
+        """
+        h, w = img_array.shape[:2]
+        
+        # Versuche die Bubble-Kontur zu finden
+        contour = self._find_bubble_contour(img_array, x_min, y_min, x_max, y_max)
+        
+        if contour is not None:
+            # Berechne die Bounding-Box der Kontur
+            bx, by, bw, bh = cv2.boundingRect(contour)
+            bubble_x_min = bx
+            bubble_y_min = by
+            bubble_x_max = bx + bw
+            bubble_y_max = by + bh
+            
+            # Füge ein kleines Padding hinzu (5% der Textbox-Größe),
+            # aber bleibe innerhalb der Bubble-Grenzen
+            text_w = x_max - x_min
+            text_h = y_max - y_min
+            small_pad_x = max(2, int(text_w * 0.05))
+            small_pad_y = max(2, int(text_h * 0.05))
+            
+            final_x_min = max(bubble_x_min, x_min - small_pad_x)
+            final_y_min = max(bubble_y_min, y_min - small_pad_y)
+            final_x_max = min(bubble_x_max, x_max + small_pad_x)
+            final_y_max = min(bubble_y_max, y_max + small_pad_y)
+            
+            return final_x_min, final_y_min, final_x_max, final_y_max
+        
+        # Fallback: Begrenze das Padding auf maximal 30% der Textbox-Größe
+        text_w = x_max - x_min
+        text_h = y_max - y_min
+        max_pad_x = min(padding_x, int(text_w * 0.3))
+        max_pad_y = min(padding_y, int(text_h * 0.3))
+        
+        final_x_min = max(0, x_min - max_pad_x)
+        final_y_min = max(0, y_min - max_pad_y)
+        final_x_max = min(w, x_max + max_pad_x)
+        final_y_max = min(h, y_max + max_pad_y)
+        
+        return final_x_min, final_y_min, final_x_max, final_y_max
 
     def draw_boxes_only(self, image: Image.Image, text_regions: List[Tuple[List[List[int]], str, str]]) -> Image.Image:
         """
@@ -55,31 +186,36 @@ class ImageProcessor:
             image: The original PIL Image.
             text_regions: List of tuples (bbox, original_text, translated_text).
                          bbox is [[x1,y1], [x2,y2], [x3,y3], [x4,y4]].
+            use_ellipse: If True, draw elliptical bubbles, otherwise rectangles.
+            ellipse_padding_x: Horizontal padding (now used as max padding, constrained by bubble detection).
+            ellipse_padding_y: Vertical padding (now used as max padding, constrained by bubble detection).
         
         Returns:
             Processed PIL Image.
         """
         draw = ImageDraw.Draw(image)
         img_w, img_h = image.size
-        # Convert once to numpy for background color sampling
+        # Convert once to numpy for background color sampling and bubble detection
         img_array = np.array(image)
         
         for bbox, original, translated in text_regions:
-            # Calculate bounding rectangle
+            # Calculate bounding rectangle from OCR
             pts = np.array(bbox)
-            x_min = int(np.min(pts[:, 0]))
-            y_min = int(np.min(pts[:, 1]))
-            x_max = int(np.max(pts[:, 0]))
-            y_max = int(np.max(pts[:, 1]))
+            ocr_x_min = int(np.min(pts[:, 0]))
+            ocr_y_min = int(np.min(pts[:, 1]))
+            ocr_x_max = int(np.max(pts[:, 0]))
+            ocr_y_max = int(np.max(pts[:, 1]))
             
-            # Apply additional ellipse padding (clamped to image bounds)
-            if ellipse_padding_x or ellipse_padding_y:
-                x_min = max(0, x_min - ellipse_padding_x)
-                y_min = max(0, y_min - ellipse_padding_y)
-                x_max = min(img_w, x_max + ellipse_padding_x)
-                y_max = min(img_h, y_max + ellipse_padding_y)
+            # Verwende intelligente Bubble-Erkennung statt blindem Padding
+            # Die Methode findet die tatsächliche Sprechblase und begrenzt das Overlay darauf
+            x_min, y_min, x_max, y_max = self._get_bubble_bounds(
+                img_array, 
+                ocr_x_min, ocr_y_min, ocr_x_max, ocr_y_max,
+                padding_x=ellipse_padding_x,
+                padding_y=ellipse_padding_y
+            )
 
-            # Sample background brightness inside the (padded) region to decide
+            # Sample background brightness inside the region to decide
             # whether the bubble is dark or light.
             bubble_fill = "white"
             text_color = "black"
