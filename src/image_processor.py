@@ -8,7 +8,7 @@ class ImageProcessor:
     def __init__(self):
         pass
 
-    def _find_bubble_contour(self, img_array: np.ndarray, x_min: int, y_min: int, x_max: int, y_max: int, margin: int = 30) -> Optional[np.ndarray]:
+    def _find_bubble_contour(self, img_array: np.ndarray, x_min: int, y_min: int, x_max: int, y_max: int, margin: int = 50) -> Optional[np.ndarray]:
         """
         Findet die Kontur der Sprechblase, die den erkannten Textbereich enthält.
         
@@ -47,6 +47,10 @@ class ImageProcessor:
         # Wir suchen nach hellen Bereichen
         _, binary = cv2.threshold(gray, 200, 255, cv2.THRESH_BINARY)
         
+        # Morphologische Operationen um kleine Lücken zu schließen
+        kernel = np.ones((3, 3), np.uint8)
+        binary = cv2.morphologyEx(binary, cv2.MORPH_CLOSE, kernel)
+        
         # Finde Konturen
         contours, _ = cv2.findContours(binary, cv2.RETR_EXTERNAL, cv2.CHAIN_APPROX_SIMPLE)
         
@@ -71,8 +75,8 @@ class ImageProcessor:
                 area = cv2.contourArea(contour)
                 
                 # Die Kontur sollte mindestens so groß wie der Text sein,
-                # aber nicht zu groß (max 10x Textfläche)
-                if area >= text_area * 0.5 and area <= text_area * 15:
+                # aber nicht zu groß (max 20x Textfläche)
+                if area >= text_area * 0.5 and area <= text_area * 20:
                     # Bevorzuge Konturen die näher an der Textgröße sind
                     # Score = Verhältnis von Konturfläche zu Textfläche
                     score = abs(area / text_area - 2.0)  # Ideale Blase ist ~2x Textfläche
@@ -82,6 +86,10 @@ class ImageProcessor:
                         best_contour = contour
         
         if best_contour is not None:
+            # Vereinfache die Kontur leicht für glattere Kanten
+            epsilon = 0.01 * cv2.arcLength(best_contour, True)
+            best_contour = cv2.approxPolyDP(best_contour, epsilon, True)
+            
             # Verschiebe die Kontur zurück zu globalen Koordinaten
             best_contour = best_contour + np.array([search_x1, search_y1])
             return best_contour
@@ -186,9 +194,9 @@ class ImageProcessor:
             image: The original PIL Image.
             text_regions: List of tuples (bbox, original_text, translated_text).
                          bbox is [[x1,y1], [x2,y2], [x3,y3], [x4,y4]].
-            use_ellipse: If True, draw elliptical bubbles, otherwise rectangles.
-            ellipse_padding_x: Horizontal padding (now used as max padding, constrained by bubble detection).
-            ellipse_padding_y: Vertical padding (now used as max padding, constrained by bubble detection).
+            use_ellipse: If True and no contour found, draw elliptical bubbles, otherwise rectangles.
+            ellipse_padding_x: Horizontal padding (used as fallback if no bubble contour found).
+            ellipse_padding_y: Vertical padding (used as fallback if no bubble contour found).
         
         Returns:
             Processed PIL Image.
@@ -206,24 +214,36 @@ class ImageProcessor:
             ocr_x_max = int(np.max(pts[:, 0]))
             ocr_y_max = int(np.max(pts[:, 1]))
             
-            # Verwende intelligente Bubble-Erkennung statt blindem Padding
-            # Die Methode findet die tatsächliche Sprechblase und begrenzt das Overlay darauf
-            x_min, y_min, x_max, y_max = self._get_bubble_bounds(
+            # Versuche die tatsächliche Sprechblasen-Kontur zu finden
+            bubble_contour = self._find_bubble_contour(
                 img_array, 
-                ocr_x_min, ocr_y_min, ocr_x_max, ocr_y_max,
-                padding_x=ellipse_padding_x,
-                padding_y=ellipse_padding_y
+                ocr_x_min, ocr_y_min, ocr_x_max, ocr_y_max
             )
+            
+            # Bestimme die Bounding-Box für den Text
+            if bubble_contour is not None:
+                # Benutze die Bounding-Box der Kontur für den Text
+                bx, by, bw, bh = cv2.boundingRect(bubble_contour)
+                x_min, y_min = bx, by
+                x_max, y_max = bx + bw, by + bh
+            else:
+                # Fallback: Verwende die OCR-Box mit begrenztem Padding
+                x_min, y_min, x_max, y_max = self._get_bubble_bounds(
+                    img_array, 
+                    ocr_x_min, ocr_y_min, ocr_x_max, ocr_y_max,
+                    padding_x=ellipse_padding_x,
+                    padding_y=ellipse_padding_y
+                )
 
             # Sample background brightness inside the region to decide
             # whether the bubble is dark or light.
             bubble_fill = "white"
             text_color = "black"
             try:
-                region = img_array[y_min:y_max, x_min:x_max]
+                region = img_array[ocr_y_min:ocr_y_max, ocr_x_min:ocr_x_max]
                 if region.size > 0:
                     # Use luminance (Y) from RGB
-                    if region.shape[-1] >= 3:
+                    if len(region.shape) >= 3 and region.shape[-1] >= 3:
                         r = region[..., 0].astype(np.float32)
                         g = region[..., 1].astype(np.float32)
                         b = region[..., 2].astype(np.float32)
@@ -243,13 +263,23 @@ class ImageProcessor:
                 bubble_fill = "white"
                 text_color = "black"
             
-            # Draw background (inpainting) as ellipse or rectangle
-            if use_ellipse:
-                draw.ellipse([x_min, y_min, x_max, y_max], fill=bubble_fill, outline=bubble_fill)
+            # Zeichne den Hintergrund
+            if bubble_contour is not None:
+                # Zeichne die tatsächliche Sprechblasen-Kontur als Polygon
+                # Konvertiere numpy Kontur zu Liste von Tupeln für PIL
+                contour_points = bubble_contour.reshape(-1, 2)
+                polygon_points = [(int(p[0]), int(p[1])) for p in contour_points]
+                
+                if len(polygon_points) >= 3:
+                    draw.polygon(polygon_points, fill=bubble_fill, outline=bubble_fill)
             else:
-                draw.rectangle([x_min, y_min, x_max, y_max], fill=bubble_fill, outline=bubble_fill)
+                # Fallback: Ellipse oder Rechteck
+                if use_ellipse:
+                    draw.ellipse([x_min, y_min, x_max, y_max], fill=bubble_fill, outline=bubble_fill)
+                else:
+                    draw.rectangle([x_min, y_min, x_max, y_max], fill=bubble_fill, outline=bubble_fill)
             
-            # Calculate box dimensions
+            # Calculate box dimensions for text
             box_width = x_max - x_min
             box_height = y_max - y_min
             
