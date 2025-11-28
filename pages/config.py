@@ -48,9 +48,9 @@ if 'pdf_zoom_factor' not in st.session_state:
 if 'ocr_confidence_threshold' not in st.session_state:
     st.session_state.ocr_confidence_threshold = 0.4
 if 'box_padding_x' not in st.session_state:
-    st.session_state.box_padding_x = 40
+    st.session_state.box_padding_x = 30
 if 'box_padding_y' not in st.session_state:
-    st.session_state.box_padding_y = 40
+    st.session_state.box_padding_y = 10
 
 # Create tabs for different configuration sections
 tab_general, tab_ocr_tool = st.tabs(["🌍 General Settings", "🔧 OCR Tool"])
