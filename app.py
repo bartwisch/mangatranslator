@@ -248,6 +248,11 @@ def main():
             # New file detected! Reset state.
             st.session_state.last_uploaded_file_id = current_file_id
             
+            # Reset translation state flags
+            st.session_state.translation_in_progress = False
+            st.session_state.trigger_translation = False
+            st.session_state.stop_translation = False
+            
             # Cleanup old temp file
             if st.session_state.temp_pdf_path and os.path.exists(st.session_state.temp_pdf_path):
                 try:

@@ -8,7 +8,7 @@ class ImageProcessor:
     def __init__(self):
         pass
 
-    def _find_bubble_contour(self, img_array: np.ndarray, x_min: int, y_min: int, x_max: int, y_max: int, margin: int = 50) -> Optional[np.ndarray]:
+    def _find_bubble_contour(self, img_array: np.ndarray, x_min: int, y_min: int, x_max: int, y_max: int, margin: int = 80) -> Optional[np.ndarray]:
         """
         Findet die Kontur der Sprechblase, die den erkannten Textbereich enthält.
         
@@ -25,11 +25,16 @@ class ImageProcessor:
         """
         h, w = img_array.shape[:2]
         
-        # Erweitere den Suchbereich um die Textbox
-        search_x1 = max(0, x_min - margin)
-        search_y1 = max(0, y_min - margin)
-        search_x2 = min(w, x_max + margin)
-        search_y2 = min(h, y_max + margin)
+        # Erweitere den Suchbereich um die Textbox (größerer Bereich für bessere Erkennung)
+        text_w = x_max - x_min
+        text_h = y_max - y_min
+        # Dynamischer Margin basierend auf Textgröße, mindestens 80px
+        dynamic_margin = max(margin, max(text_w, text_h))
+        
+        search_x1 = max(0, x_min - dynamic_margin)
+        search_y1 = max(0, y_min - dynamic_margin)
+        search_x2 = min(w, x_max + dynamic_margin)
+        search_y2 = min(h, y_max + dynamic_margin)
         
         # Extrahiere den Suchbereich
         region = img_array[search_y1:search_y2, search_x1:search_x2]
@@ -41,15 +46,28 @@ class ImageProcessor:
         if len(region.shape) == 3:
             gray = cv2.cvtColor(region, cv2.COLOR_RGB2GRAY)
         else:
-            gray = region
+            gray = region.copy()
         
-        # Binarisiere - Sprechblasen sind typischerweise weiß (>200)
-        # Wir suchen nach hellen Bereichen
-        _, binary = cv2.threshold(gray, 200, 255, cv2.THRESH_BINARY)
+        # Verwende Otsu's Binarisierung für adaptive Schwellwertfindung
+        # Das funktioniert besser bei verschiedenen Manga-Stilen
+        _, binary = cv2.threshold(gray, 0, 255, cv2.THRESH_BINARY + cv2.THRESH_OTSU)
         
-        # Morphologische Operationen um kleine Lücken zu schließen
-        kernel = np.ones((3, 3), np.uint8)
+        # Falls Otsu nicht gut funktioniert (zu wenig Kontrast), versuche festen Schwellwert
+        # Prüfe ob das Ergebnis sinnvoll ist (nicht alles weiß oder schwarz)
+        white_ratio = np.sum(binary == 255) / binary.size
+        if white_ratio < 0.1 or white_ratio > 0.9:
+            # Otsu hat nicht gut funktioniert, verwende festen Schwellwert
+            # Versuche verschiedene Schwellwerte
+            for threshold in [180, 160, 200, 220]:
+                _, binary = cv2.threshold(gray, threshold, 255, cv2.THRESH_BINARY)
+                white_ratio = np.sum(binary == 255) / binary.size
+                if 0.1 <= white_ratio <= 0.9:
+                    break
+        
+        # Morphologische Operationen um kleine Lücken zu schließen und Rauschen zu entfernen
+        kernel = np.ones((5, 5), np.uint8)
         binary = cv2.morphologyEx(binary, cv2.MORPH_CLOSE, kernel)
+        binary = cv2.morphologyEx(binary, cv2.MORPH_OPEN, kernel)
         
         # Finde Konturen
         contours, _ = cv2.findContours(binary, cv2.RETR_EXTERNAL, cv2.CHAIN_APPROX_SIMPLE)
@@ -60,9 +78,7 @@ class ImageProcessor:
         # Berechne den Mittelpunkt der Textbox relativ zum Suchbereich
         text_center_x = (x_min + x_max) // 2 - search_x1
         text_center_y = (y_min + y_max) // 2 - search_y1
-        text_width = x_max - x_min
-        text_height = y_max - y_min
-        text_area = text_width * text_height
+        text_area = text_w * text_h
         
         # Finde die Kontur, die den Textmittelpunkt enthält
         best_contour = None
@@ -75,19 +91,19 @@ class ImageProcessor:
                 area = cv2.contourArea(contour)
                 
                 # Die Kontur sollte mindestens so groß wie der Text sein,
-                # aber nicht zu groß (max 20x Textfläche)
-                if area >= text_area * 0.5 and area <= text_area * 20:
+                # aber nicht zu groß (max 25x Textfläche für größere Sprechblasen)
+                if area >= text_area * 0.3 and area <= text_area * 25:
                     # Bevorzuge Konturen die näher an der Textgröße sind
                     # Score = Verhältnis von Konturfläche zu Textfläche
-                    score = abs(area / text_area - 2.0)  # Ideale Blase ist ~2x Textfläche
+                    score = abs(area / text_area - 1.5)  # Ideale Blase ist ~1.5x Textfläche
                     
                     if score < best_score:
                         best_score = score
                         best_contour = contour
         
         if best_contour is not None:
-            # Vereinfache die Kontur leicht für glattere Kanten
-            epsilon = 0.01 * cv2.arcLength(best_contour, True)
+            # Vereinfache die Kontur für glattere Kanten (aber nicht zu stark)
+            epsilon = 0.005 * cv2.arcLength(best_contour, True)
             best_contour = cv2.approxPolyDP(best_contour, epsilon, True)
             
             # Verschiebe die Kontur zurück zu globalen Koordinaten
@@ -186,107 +202,158 @@ class ImageProcessor:
             
         return image
 
-    def overlay_text(self, image: Image.Image, text_regions: List[Tuple[List[List[int]], str, str]], use_ellipse: bool = True, ellipse_padding_x: int = 0, ellipse_padding_y: int = 0) -> Image.Image:
+    def overlay_text(self, image: Image.Image, text_regions: List[Tuple[List[List[int]], str, str]], use_ellipse: bool = True, ellipse_padding_x: int = 0, ellipse_padding_y: int = 0, debug: bool = False) -> Image.Image:
         """
         Overlays translated text onto the image.
+        
+        Füllt nur den Bereich den der übersetzte Text benötigt (plus Padding),
+        nicht die gesamte Sprechblase.
         
         Args:
             image: The original PIL Image.
             text_regions: List of tuples (bbox, original_text, translated_text).
                          bbox is [[x1,y1], [x2,y2], [x3,y3], [x4,y4]].
-            use_ellipse: If True and no contour found, draw elliptical bubbles, otherwise rectangles.
-            ellipse_padding_x: Horizontal padding (used as fallback if no bubble contour found).
-            ellipse_padding_y: Vertical padding (used as fallback if no bubble contour found).
+            use_ellipse: If True, draw elliptical background, otherwise rectangle.
+            ellipse_padding_x: Horizontal padding around the text.
+            ellipse_padding_y: Vertical padding around the text.
+            debug: If True, print debug info.
         
         Returns:
             Processed PIL Image.
         """
         draw = ImageDraw.Draw(image)
         img_w, img_h = image.size
-        # Convert once to numpy for background color sampling and bubble detection
         img_array = np.array(image)
         
         for bbox, original, translated in text_regions:
-            # Calculate bounding rectangle from OCR
+            # Calculate bounding rectangle from OCR (= Textbereich)
             pts = np.array(bbox)
             ocr_x_min = int(np.min(pts[:, 0]))
             ocr_y_min = int(np.min(pts[:, 1]))
             ocr_x_max = int(np.max(pts[:, 0]))
             ocr_y_max = int(np.max(pts[:, 1]))
             
-            # Versuche die tatsächliche Sprechblasen-Kontur zu finden
-            bubble_contour = self._find_bubble_contour(
-                img_array, 
-                ocr_x_min, ocr_y_min, ocr_x_max, ocr_y_max
-            )
-            
-            # Bestimme die Bounding-Box für den Text
-            if bubble_contour is not None:
-                # Benutze die Bounding-Box der Kontur für den Text
-                bx, by, bw, bh = cv2.boundingRect(bubble_contour)
-                x_min, y_min = bx, by
-                x_max, y_max = bx + bw, by + bh
-            else:
-                # Fallback: Verwende die OCR-Box mit begrenztem Padding
-                x_min, y_min, x_max, y_max = self._get_bubble_bounds(
-                    img_array, 
-                    ocr_x_min, ocr_y_min, ocr_x_max, ocr_y_max,
-                    padding_x=ellipse_padding_x,
-                    padding_y=ellipse_padding_y
-                )
+            ocr_width = ocr_x_max - ocr_x_min
+            ocr_height = ocr_y_max - ocr_y_min
 
-            # Sample background brightness inside the region to decide
-            # whether the bubble is dark or light.
+            # Sample background brightness to decide text color
             bubble_fill = "white"
             text_color = "black"
             try:
                 region = img_array[ocr_y_min:ocr_y_max, ocr_x_min:ocr_x_max]
                 if region.size > 0:
-                    # Use luminance (Y) from RGB
                     if len(region.shape) >= 3 and region.shape[-1] >= 3:
                         r = region[..., 0].astype(np.float32)
                         g = region[..., 1].astype(np.float32)
                         b = region[..., 2].astype(np.float32)
                         luma = 0.299 * r + 0.587 * g + 0.114 * b
                     else:
-                        # Grayscale image
                         luma = region.astype(np.float32)
-
                     mean_luma = float(luma.mean()) / 255.0
-
-                    # Threshold: <0.5 => dark bubble
                     if mean_luma < 0.5:
                         bubble_fill = "#111111"
                         text_color = "white"
             except Exception:
-                # Fallback to default colors if anything goes wrong
-                bubble_fill = "white"
-                text_color = "black"
+                pass
             
-            # Zeichne den Hintergrund
-            if bubble_contour is not None:
-                # Zeichne die tatsächliche Sprechblasen-Kontur als Polygon
-                # Konvertiere numpy Kontur zu Liste von Tupeln für PIL
-                contour_points = bubble_contour.reshape(-1, 2)
-                polygon_points = [(int(p[0]), int(p[1])) for p in contour_points]
+            # Berechne zuerst die Text-Größe die wir brauchen
+            text_info = self._calculate_text_size(draw, translated, ocr_width, ocr_height)
+            
+            if text_info is None:
+                continue
                 
-                if len(polygon_points) >= 3:
-                    draw.polygon(polygon_points, fill=bubble_fill, outline=bubble_fill)
+            font, wrapped_text, text_w, text_h = text_info
+            
+            # Zentriere den Text im OCR-Bereich
+            center_x = ocr_x_min + (ocr_width - text_w) // 2
+            center_y = ocr_y_min + (ocr_height - text_h) // 2
+            
+            # Der Füllbereich muss mindestens den OCR-Bereich (Original-Text) abdecken!
+            # Plus etwas Padding für den neuen Text
+            fill_x_min = min(ocr_x_min, center_x) - ellipse_padding_x
+            fill_y_min = min(ocr_y_min, center_y) - ellipse_padding_y
+            fill_x_max = max(ocr_x_max, center_x + text_w) + ellipse_padding_x
+            fill_y_max = max(ocr_y_max, center_y + text_h) + ellipse_padding_y
+            
+            # Clamp to image bounds
+            fill_x_min = max(0, fill_x_min)
+            fill_y_min = max(0, fill_y_min)
+            fill_x_max = min(img_w, fill_x_max)
+            fill_y_max = min(img_h, fill_y_max)
+            
+            # Zeichne den Hintergrund (nur so groß wie der Text + Padding)
+            if use_ellipse:
+                draw.ellipse([fill_x_min, fill_y_min, fill_x_max, fill_y_max], 
+                           fill=bubble_fill, outline=bubble_fill)
             else:
-                # Fallback: Ellipse oder Rechteck
-                if use_ellipse:
-                    draw.ellipse([x_min, y_min, x_max, y_max], fill=bubble_fill, outline=bubble_fill)
-                else:
-                    draw.rectangle([x_min, y_min, x_max, y_max], fill=bubble_fill, outline=bubble_fill)
+                draw.rectangle([fill_x_min, fill_y_min, fill_x_max, fill_y_max], 
+                             fill=bubble_fill, outline=bubble_fill)
             
-            # Calculate box dimensions for text
-            box_width = x_max - x_min
-            box_height = y_max - y_min
+            # Zeichne den Text
+            draw.multiline_text((center_x, center_y), wrapped_text, 
+                              fill=text_color, font=font, align="center")
             
-            # Draw text with chosen color
-            self._draw_text_in_box(draw, translated, x_min, y_min, box_width, box_height, text_color=text_color)
+            if debug:
+                print(f"  Text: '{translated[:30]}...' -> Fill: {fill_x_max-fill_x_min}x{fill_y_max-fill_y_min}px")
             
         return image
+
+    def _calculate_text_size(self, draw: ImageDraw.ImageDraw, text: str, max_w: int, max_h: int) -> Optional[Tuple]:
+        """
+        Berechnet die optimale Schriftgröße und den umgebrochenen Text.
+        
+        Returns:
+            Tuple (font, wrapped_text, text_width, text_height) oder None
+        """
+        import textwrap
+        
+        if text is None or not str(text).strip():
+            return None
+            
+        text = str(text)
+        
+        min_fontsize = 8
+        start_fontsize = 18
+        padding = 4
+        available_w = max(1, max_w - 2*padding)
+        available_h = max(1, max_h - 2*padding)
+        
+        for fontsize in range(start_fontsize, min_fontsize - 1, -2):
+            try:
+                font = self._load_font(fontsize)
+                bbox = font.getbbox("M")
+                char_w = bbox[2] - bbox[0] if bbox else fontsize * 0.6
+                chars_per_line = max(1, int(available_w / char_w))
+                wrapped_text = textwrap.fill(text, width=chars_per_line, break_long_words=False)
+                
+                if hasattr(draw, 'multiline_textbbox'):
+                    text_bbox = draw.multiline_textbbox((0,0), wrapped_text, font=font)
+                    text_h = text_bbox[3] - text_bbox[1]
+                    text_w = text_bbox[2] - text_bbox[0]
+                else:
+                    text_w, text_h = draw.textsize(wrapped_text, font=font)
+                
+                if text_h <= available_h and text_w <= available_w * 1.1:
+                    return (font, wrapped_text, text_w, text_h)
+                    
+            except Exception:
+                continue
+        
+        # Fallback: kleinste Schrift
+        font = self._load_font(min_fontsize)
+        bbox = font.getbbox("M")
+        char_w = bbox[2] - bbox[0] if bbox else min_fontsize * 0.6
+        chars_per_line = max(1, int(available_w / char_w))
+        wrapped_text = textwrap.fill(text, width=chars_per_line)
+        
+        if hasattr(draw, 'multiline_textbbox'):
+            text_bbox = draw.multiline_textbbox((0,0), wrapped_text, font=font)
+            text_h = text_bbox[3] - text_bbox[1]
+            text_w = text_bbox[2] - text_bbox[0]
+        else:
+            text_w, text_h = draw.textsize(wrapped_text, font=font)
+            
+        return (font, wrapped_text, text_w, text_h)
 
     def _draw_text_in_box(self, draw: ImageDraw.ImageDraw, text: str, x: int, y: int, w: int, h: int, text_color: str = "black"):
         """\n         Fits text inside a box by iteratively reducing font size and wrapping.
