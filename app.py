@@ -2,6 +2,7 @@ import streamlit as st
 import os
 import tempfile
 import certifi
+import json
 from src.pdf_handler import PDFHandler
 from src.ocr_handler import OCRHandler
 from src.translator import TranslatorService
@@ -52,6 +53,28 @@ def parse_page_range(range_str: str) -> list[int]:
                 
     return sorted(list(pages))
 
+def _get_secrets_path() -> str:
+    home = os.path.expanduser("~")
+    base_dir = os.path.join(home, ".mangatranslator")
+    return os.path.join(base_dir, "secrets.json")
+
+def load_local_secrets():
+    path = _get_secrets_path()
+    if not os.path.exists(path):
+        return {}
+    try:
+        with open(path, "r", encoding="utf-8") as f:
+            return json.load(f)
+    except Exception:
+        return {}
+
+def save_local_secrets(secrets: dict) -> None:
+    path = _get_secrets_path()
+    base_dir = os.path.dirname(path)
+    os.makedirs(base_dir, exist_ok=True)
+    with open(path, "w", encoding="utf-8") as f:
+        json.dump(secrets, f)
+
 def main():
     # Session State Initialization
     if 'preview_images' not in st.session_state:
@@ -96,6 +119,14 @@ def main():
         st.session_state.box_padding_y = 10
     if 'stop_translation' not in st.session_state:
         st.session_state.stop_translation = False
+
+    if 'local_secrets_loaded' not in st.session_state:
+        secrets = load_local_secrets()
+        if not st.session_state.get('stored_openai_key') and isinstance(secrets, dict):
+            key = secrets.get('openai_api_key') or secrets.get('openai_key')
+            if key:
+                st.session_state.stored_openai_key = key
+        st.session_state.local_secrets_loaded = True
 
     # Read settings from Session State
     service_choice = st.session_state.translation_service_selection
@@ -150,6 +181,17 @@ def main():
 
         if st.session_state.stored_openai_key:
             st.success("✓ API Key configured")
+            if st.button("Save Key on this Device", key="save_openai_key"):
+                secrets = load_local_secrets()
+                if not isinstance(secrets, dict):
+                    secrets = {}
+                secrets["openai_api_key"] = st.session_state.stored_openai_key
+                try:
+                    save_local_secrets(secrets)
+                except Exception as e:
+                    st.error(f"Could not save key locally: {e}")
+                else:
+                    st.success("OpenAI API Key saved locally on this machine.")
         else:
             st.info("💡 Get your API key from [platform.openai.com/api-keys](https://platform.openai.com/api-keys)")
         
