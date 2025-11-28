@@ -93,7 +93,13 @@ with tab_general:
         if "DeepL" in service_choice:
             st.text_input("DeepL API Key", type="password", key="stored_deepl_key", help="Paste your DeepL API Key here.")
         elif "OpenAI" in service_choice:
-            st.text_input("OpenAI API Key", type="password", key="stored_openai_key", help="Paste your OpenAI API Key here.")
+            st.text_input(
+                "OpenAI API Key",
+                type="password",
+                key="stored_openai_key",
+                value=st.session_state.stored_openai_key,
+                help="Paste your OpenAI API Key here.",
+            )
         elif "xAI" in service_choice:
             st.text_input("xAI API Key", type="password", key="stored_xai_key", help="Paste your xAI API Key here.")
 

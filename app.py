@@ -156,6 +156,7 @@ def main():
                 "Enter your OpenAI API Key",
                 type="password",
                 key="stored_openai_key",
+                value=st.session_state.stored_openai_key,
                 help="Your API key is stored securely in this session only.",
                 label_visibility="collapsed"
             )
