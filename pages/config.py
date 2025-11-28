@@ -48,7 +48,7 @@ if 'pdf_zoom_factor' not in st.session_state:
 if 'ocr_confidence_threshold' not in st.session_state:
     st.session_state.ocr_confidence_threshold = 0.4
 if 'box_padding_setting' not in st.session_state:
-    st.session_state.box_padding_setting = 20
+    st.session_state.box_padding_setting = 30
 
 # Create tabs for different configuration sections
 tab_general, tab_ocr_tool = st.tabs(["🌍 General Settings", "🔧 OCR Tool"])
@@ -118,7 +118,7 @@ with tab_general:
         st.slider(
             "Box Padding (Global)",
             min_value=-10,
-            max_value=20,
+            max_value=50,
             step=1,
             key="box_padding_setting",
             help="Vergrößert (>0) oder verkleinert (<0) die erkannten Boxen um X Pixel."
@@ -146,6 +146,25 @@ with tab_ocr_tool:
             key='ocr_preprocess_mode',
             help="'gentle' = recommended for manga, 'none' = original image (3x scaled), 'raw' = no scaling, 'aggressive' = strong binarization"
         )
+    
+    
+    st.divider()
+    
+    # Current Settings Display (always visible)
+    st.subheader("📊 Current OCR Settings")
+    col_settings1, col_settings2, col_settings3, col_settings4 = st.columns(4)
+    
+    with col_settings1:
+        st.metric("OCR Engine", st.session_state.ocr_engine_selection.upper())
+    
+    with col_settings2:
+        st.metric("Preprocessing", st.session_state.ocr_preprocess_mode.capitalize())
+    
+    with col_settings3:
+        st.metric("Confidence Threshold", f"{st.session_state.ocr_confidence_threshold:.2f}")
+    
+    with col_settings4:
+        st.metric("Box Padding", f"{st.session_state.box_padding_setting}px")
     
     st.divider()
     st.subheader("📄 Test OCR on PDF Pages")

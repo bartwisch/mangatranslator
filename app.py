@@ -85,7 +85,7 @@ def main():
     if 'ocr_confidence_threshold' not in st.session_state:
         st.session_state.ocr_confidence_threshold = 0.4
     if 'box_padding_setting' not in st.session_state:
-        st.session_state.box_padding_setting = 20
+        st.session_state.box_padding_setting = 30
     if 'stop_translation' not in st.session_state:
         st.session_state.stop_translation = False
 
