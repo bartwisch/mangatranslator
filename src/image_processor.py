@@ -235,6 +235,16 @@ class ImageProcessor:
             
             ocr_width = ocr_x_max - ocr_x_min
             ocr_height = ocr_y_max - ocr_y_min
+            
+            # Finde die Sprechblasen-Grenzen (größer als nur OCR-Bereich)
+            bubble_x_min, bubble_y_min, bubble_x_max, bubble_y_max = self._get_bubble_bounds(
+                img_array, ocr_x_min, ocr_y_min, ocr_x_max, ocr_y_max
+            )
+            bubble_width = bubble_x_max - bubble_x_min
+            bubble_height = bubble_y_max - bubble_y_min
+            
+            if debug:
+                print(f"OCR-Box: {ocr_width}x{ocr_height}, Bubble: {bubble_width}x{bubble_height}")
 
             # Sample background brightness to decide text color
             bubble_fill = "white"
@@ -256,17 +266,24 @@ class ImageProcessor:
             except Exception:
                 pass
             
-            # Berechne zuerst die Text-Größe die wir brauchen
-            text_info = self._calculate_text_size(draw, translated, ocr_width, ocr_height)
+            # Nutze die Bubble-Größe für die Text-Berechnung (größerer Text!)
+            # Aber mit etwas Rand, damit der Text nicht an den Rand stößt
+            available_width = int(bubble_width * 0.85)
+            available_height = int(bubble_height * 0.85)
+            
+            # Berechne die Text-Größe basierend auf verfügbarem Bubble-Platz
+            text_info = self._calculate_text_size(draw, translated, available_width, available_height)
             
             if text_info is None:
                 continue
                 
             font, wrapped_text, text_w, text_h = text_info
             
-            # Zentriere den Text im OCR-Bereich
-            center_x = ocr_x_min + (ocr_width - text_w) // 2
-            center_y = ocr_y_min + (ocr_height - text_h) // 2
+            # Zentriere den Text in der BUBBLE (nicht nur OCR-Box) für maximale Größe
+            bubble_center_x = bubble_x_min + bubble_width // 2
+            bubble_center_y = bubble_y_min + bubble_height // 2
+            center_x = bubble_center_x - text_w // 2
+            center_y = bubble_center_y - text_h // 2
             
             # Der Füllbereich muss mindestens den OCR-Bereich (Original-Text) abdecken!
             # Plus etwas Padding für den neuen Text
@@ -301,6 +318,7 @@ class ImageProcessor:
     def _calculate_text_size(self, draw: ImageDraw.ImageDraw, text: str, max_w: int, max_h: int) -> Optional[Tuple]:
         """
         Berechnet die optimale Schriftgröße und den umgebrochenen Text.
+        Maximiert die Schriftgröße so dass der Text in den verfügbaren Bereich passt.
         
         Returns:
             Tuple (font, wrapped_text, text_width, text_height) oder None
@@ -312,19 +330,24 @@ class ImageProcessor:
             
         text = str(text)
         
-        min_fontsize = 8
-        start_fontsize = 18
-        padding = 4
+        min_fontsize = 10
+        # Starte mit einer großen Schrift basierend auf der Box-Größe
+        # Faustregel: Schriftgröße ~ Höhe / 2 für einzeiligen Text
+        start_fontsize = min(60, max(20, int(max_h * 0.6)))
+        
+        padding = 6
         available_w = max(1, max_w - 2*padding)
         available_h = max(1, max_h - 2*padding)
         
-        for fontsize in range(start_fontsize, min_fontsize - 1, -2):
+        best_result = None
+        
+        for fontsize in range(start_fontsize, min_fontsize - 1, -1):
             try:
                 font = self._load_font(fontsize)
                 bbox = font.getbbox("M")
                 char_w = bbox[2] - bbox[0] if bbox else fontsize * 0.6
                 chars_per_line = max(1, int(available_w / char_w))
-                wrapped_text = textwrap.fill(text, width=chars_per_line, break_long_words=False)
+                wrapped_text = textwrap.fill(text, width=chars_per_line, break_long_words=True)
                 
                 if hasattr(draw, 'multiline_textbbox'):
                     text_bbox = draw.multiline_textbbox((0,0), wrapped_text, font=font)
@@ -333,7 +356,9 @@ class ImageProcessor:
                 else:
                     text_w, text_h = draw.textsize(wrapped_text, font=font)
                 
-                if text_h <= available_h and text_w <= available_w * 1.1:
+                # Prüfe ob es passt
+                if text_h <= available_h and text_w <= available_w:
+                    # Gefunden! Nimm die größte passende Schrift
                     return (font, wrapped_text, text_w, text_h)
                     
             except Exception:
@@ -344,7 +369,7 @@ class ImageProcessor:
         bbox = font.getbbox("M")
         char_w = bbox[2] - bbox[0] if bbox else min_fontsize * 0.6
         chars_per_line = max(1, int(available_w / char_w))
-        wrapped_text = textwrap.fill(text, width=chars_per_line)
+        wrapped_text = textwrap.fill(text, width=chars_per_line, break_long_words=True)
         
         if hasattr(draw, 'multiline_textbbox'):
             text_bbox = draw.multiline_textbbox((0,0), wrapped_text, font=font)
