@@ -102,8 +102,8 @@ def main():
     debug_mode = st.session_state.debug_mode_checkbox
     show_boxes = st.session_state.show_boxes_checkbox
     use_ellipse_bubbles = st.session_state.get('use_ellipse_bubbles', True)
-    ellipse_padding_x = st.session_state.get('ellipse_padding_x', 10)
-    ellipse_padding_y = st.session_state.get('ellipse_padding_y', 10)
+    ellipse_padding_x = st.session_state.get('ellipse_padding_x', 28)
+    ellipse_padding_y = st.session_state.get('ellipse_padding_y', 28)
     bubble_threshold = st.session_state.bubble_threshold_setting
     ocr_engine = st.session_state.ocr_engine_selection
     ocr_preprocess = st.session_state.ocr_preprocess_mode

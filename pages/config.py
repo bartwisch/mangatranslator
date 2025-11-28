@@ -454,8 +454,8 @@ with tab_ocr_tool:
                                     
                                     # Create preview with translation overlay
                                     use_ellipse = st.session_state.get('use_ellipse_bubbles', True)
-                                    ellipse_padding_x = st.session_state.get('ellipse_padding_x', 10)
-                                    ellipse_padding_y = st.session_state.get('ellipse_padding_y', 10)
+                                    ellipse_padding_x = st.session_state.get('ellipse_padding_x', 28)
+                                    ellipse_padding_y = st.session_state.get('ellipse_padding_y', 28)
                                     preview_image = image_processor.overlay_text(
                                         image.copy(),
                                         text_regions,
