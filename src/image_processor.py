@@ -315,6 +315,69 @@ class ImageProcessor:
             
         return image
 
+    def _smart_wrap_text(self, text: str, chars_per_line: int, font, draw) -> str:
+        """
+        Intelligenter Textumbruch der Wörter möglichst nicht trennt.
+        Wenn ein Wort zu lang ist, wird es mit Bindestrich getrennt.
+        
+        Args:
+            text: Der zu umbrechen Text
+            chars_per_line: Maximale Zeichen pro Zeile (geschätzt)
+            font: Die verwendete Schrift
+            draw: ImageDraw Objekt für Textmessung
+            
+        Returns:
+            Umgebrochener Text mit Zeilenumbrüchen
+        """
+        if not text or chars_per_line <= 0:
+            return text
+            
+        words = text.split()
+        lines = []
+        current_line = []
+        current_length = 0
+        
+        for word in words:
+            word_len = len(word)
+            
+            # Prüfe ob das Wort in die aktuelle Zeile passt
+            space_needed = 1 if current_line else 0
+            
+            if current_length + space_needed + word_len <= chars_per_line:
+                # Wort passt in die Zeile
+                current_line.append(word)
+                current_length += space_needed + word_len
+            elif word_len <= chars_per_line:
+                # Wort passt nicht, aber ist kurz genug für eine eigene Zeile
+                if current_line:
+                    lines.append(" ".join(current_line))
+                current_line = [word]
+                current_length = word_len
+            else:
+                # Wort ist zu lang - muss getrennt werden
+                if current_line:
+                    lines.append(" ".join(current_line))
+                    current_line = []
+                    current_length = 0
+                
+                # Trenne das lange Wort mit Bindestrichen
+                remaining = word
+                while len(remaining) > chars_per_line:
+                    # Trenne so dass mindestens 2 Zeichen übrig bleiben
+                    split_at = max(2, chars_per_line - 1)  # -1 für den Bindestrich
+                    lines.append(remaining[:split_at] + "-")
+                    remaining = remaining[split_at:]
+                
+                if remaining:
+                    current_line = [remaining]
+                    current_length = len(remaining)
+        
+        # Letzte Zeile hinzufügen
+        if current_line:
+            lines.append(" ".join(current_line))
+        
+        return "\n".join(lines)
+
     def _calculate_text_size(self, draw: ImageDraw.ImageDraw, text: str, max_w: int, max_h: int) -> Optional[Tuple]:
         """
         Berechnet die optimale Schriftgröße und den umgebrochenen Text.
@@ -323,8 +386,6 @@ class ImageProcessor:
         Returns:
             Tuple (font, wrapped_text, text_width, text_height) oder None
         """
-        import textwrap
-        
         if text is None or not str(text).strip():
             return None
             
@@ -356,7 +417,9 @@ class ImageProcessor:
                 bbox = font.getbbox("M")
                 char_w = bbox[2] - bbox[0] if bbox else fontsize * 0.6
                 chars_per_line = max(1, int(available_w / char_w))
-                wrapped_text = textwrap.fill(text, width=chars_per_line, break_long_words=True)
+                
+                # Intelligenter Textumbruch ohne Wörter mittendrin zu trennen
+                wrapped_text = self._smart_wrap_text(text, chars_per_line, font, draw)
                 
                 if hasattr(draw, 'multiline_textbbox'):
                     text_bbox = draw.multiline_textbbox((0,0), wrapped_text, font=font)
@@ -378,7 +441,7 @@ class ImageProcessor:
         bbox = font.getbbox("M")
         char_w = bbox[2] - bbox[0] if bbox else min_fontsize * 0.6
         chars_per_line = max(1, int(available_w / char_w))
-        wrapped_text = textwrap.fill(text, width=chars_per_line, break_long_words=True)
+        wrapped_text = self._smart_wrap_text(text, chars_per_line, font, draw)
         
         if hasattr(draw, 'multiline_textbbox'):
             text_bbox = draw.multiline_textbbox((0,0), wrapped_text, font=font)
@@ -392,8 +455,6 @@ class ImageProcessor:
     def _draw_text_in_box(self, draw: ImageDraw.ImageDraw, text: str, x: int, y: int, w: int, h: int, text_color: str = "black"):
         """\n         Fits text inside a box by iteratively reducing font size and wrapping.
         """
-        import textwrap
-        
         # Skip drawing if text is None or empty/whitespace
         if text is None:
             return
@@ -426,10 +487,8 @@ class ImageProcessor:
                 # Calculate max chars per line
                 chars_per_line = max(1, int(available_w / char_w))
                 
-                # Wrap text
-                # break_long_words=False ensures we don't split words like "Unbelievable" into "Unbelievab-le"
-                # Instead, if a word is too long, the width check below will fail, and we'll try a smaller font.
-                wrapped_text = textwrap.fill(text, width=chars_per_line, break_long_words=False)
+                # Intelligenter Textumbruch ohne Wörter mittendrin zu trennen
+                wrapped_text = self._smart_wrap_text(text, chars_per_line, font, draw)
                 
                 # Measure total height
                 # getbbox returns (left, top, right, bottom)
@@ -459,7 +518,7 @@ class ImageProcessor:
              bbox = best_font.getbbox("M")
              char_w = bbox[2] - bbox[0] if bbox else min_fontsize * 0.6
              chars_per_line = max(1, int(available_w / char_w))
-             best_wrapped_text = textwrap.fill(text, width=chars_per_line)
+             best_wrapped_text = self._smart_wrap_text(text, chars_per_line, best_font, draw)
 
         # Center text vertically and horizontally
         if hasattr(draw, 'multiline_textbbox'):
