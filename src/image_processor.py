@@ -47,7 +47,7 @@ class ImageProcessor:
             
         return image
 
-    def overlay_text(self, image: Image.Image, text_regions: List[Tuple[List[List[int]], str, str]]) -> Image.Image:
+    def overlay_text(self, image: Image.Image, text_regions: List[Tuple[List[List[int]], str, str]], use_ellipse: bool = True, ellipse_padding_x: int = 0, ellipse_padding_y: int = 0) -> Image.Image:
         """
         Overlays translated text onto the image.
         
@@ -60,6 +60,7 @@ class ImageProcessor:
             Processed PIL Image.
         """
         draw = ImageDraw.Draw(image)
+        img_w, img_h = image.size
         
         for bbox, original, translated in text_regions:
             # Calculate bounding rectangle
@@ -69,8 +70,18 @@ class ImageProcessor:
             x_max = int(np.max(pts[:, 0]))
             y_max = int(np.max(pts[:, 1]))
             
-            # Draw white rectangle (inpainting)
-            draw.rectangle([x_min, y_min, x_max, y_max], fill="white", outline="white")
+            # Apply additional ellipse padding (clamped to image bounds)
+            if ellipse_padding_x or ellipse_padding_y:
+                x_min = max(0, x_min - ellipse_padding_x)
+                y_min = max(0, y_min - ellipse_padding_y)
+                x_max = min(img_w, x_max + ellipse_padding_x)
+                y_max = min(img_h, y_max + ellipse_padding_y)
+            
+            # Draw white background (inpainting) as ellipse or rectangle
+            if use_ellipse:
+                draw.ellipse([x_min, y_min, x_max, y_max], fill="white", outline="white")
+            else:
+                draw.rectangle([x_min, y_min, x_max, y_max], fill="white", outline="white")
             
             # Calculate box dimensions
             box_width = x_max - x_min
@@ -153,18 +164,25 @@ class ImageProcessor:
              chars_per_line = max(1, int(available_w / char_w))
              best_wrapped_text = textwrap.fill(text, width=chars_per_line)
 
-        # Center text vertically
+        # Center text vertically and horizontally
         if hasattr(draw, 'multiline_textbbox'):
             final_bbox = draw.multiline_textbbox((0,0), best_wrapped_text, font=best_font)
+            final_w = final_bbox[2] - final_bbox[0]
             final_h = final_bbox[3] - final_bbox[1]
         else:
-            _, final_h = draw.textsize(best_wrapped_text, font=best_font)
+            final_w, final_h = draw.textsize(best_wrapped_text, font=best_font)
             
         center_y = y + (h - final_h) // 2
         center_y = max(y, center_y) # Don't go above box
+
+        # Horizontal centering within box, respecting inner padding
+        center_x = x + (w - final_w) // 2
+        min_x = x + padding
+        max_x = x + w - padding - final_w
+        center_x = max(min_x, min(center_x, max_x))
         
         # Draw text (black)
-        draw.multiline_text((x + padding, center_y), best_wrapped_text, fill="black", font=best_font, align="center")
+        draw.multiline_text((center_x, center_y), best_wrapped_text, fill="black", font=best_font, align="center")
 
     def _load_font(self, fontsize: int):
         """Helper to load a font with fallback"""

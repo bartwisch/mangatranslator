@@ -37,6 +37,12 @@ if 'debug_mode_checkbox' not in st.session_state:
     st.session_state.debug_mode_checkbox = False
 if 'show_boxes_checkbox' not in st.session_state:
     st.session_state.show_boxes_checkbox = False
+if 'use_ellipse_bubbles' not in st.session_state:
+    st.session_state.use_ellipse_bubbles = True
+if 'ellipse_padding_x' not in st.session_state:
+    st.session_state.ellipse_padding_x = 28
+if 'ellipse_padding_y' not in st.session_state:
+    st.session_state.ellipse_padding_y = 28
 if 'bubble_threshold_setting' not in st.session_state:
     st.session_state.bubble_threshold_setting = 160
 if 'ocr_engine_selection' not in st.session_state:
@@ -87,53 +93,7 @@ with tab_general:
 
     with col2:
         st.subheader("Debug & Display Options")
-        st.checkbox("Debug Mode", help="Show OCR text vs. Translation table.", key="debug_mode_checkbox")
-        st.checkbox("Show OCR Boxes", help="Zeigt nur die erkannten Textbereiche als Rahmen.", key="show_boxes_checkbox")
-        
-        st.slider(
-            "Bubble Grouping Distance (Global)", 
-            min_value=30, 
-            max_value=300, 
-            step=10,
-            key="bubble_threshold_setting",
-            help="Maximaler Abstand (Pixel) um Textzeilen zu einer Sprechblase zusammenzufassen. Höher = mehr Gruppierung."
-        )
-        
-        st.slider(
-            "PDF Zoom Factor (Global)",
-            min_value=1.0,
-            max_value=3.0,
-            step=0.5,
-            key="pdf_zoom_factor",
-            help="Auflösung beim Importieren von PDFs. 2.0 = Standard. 1.0 = Schneller/Weicher. 3.0 = Schärfer."
-        )
-        
-        st.slider(
-            "OCR Confidence Threshold (Global)",
-            min_value=0.0,
-            max_value=1.0,
-            step=0.05,
-            key="ocr_confidence_threshold",
-            help="Minimale Sicherheit für Textboxen. Boxen unter diesem Wert werden ignoriert."
-        )
-        
-        st.slider(
-            "Box Padding X (Global)",
-            min_value=-10,
-            max_value=50,
-            step=1,
-            key="box_padding_x",
-            help="Vergrößert (>0) oder verkleinert (<0) die erkannten Boxen horizontal (links/rechts)."
-        )
-        
-        st.slider(
-            "Box Padding Y (Global)",
-            min_value=-10,
-            max_value=50,
-            step=1,
-            key="box_padding_y",
-            help="Vergrößert (>0) oder verkleinert (<0) die erkannten Boxen vertikal (oben/unten)."
-        )
+        st.info("Debug & Display Options sind im 'OCR Tool'-Tab verfügbar.")
 
 with tab_ocr_tool:
     st.header("OCR Configuration & Testing Tool")
@@ -177,6 +137,75 @@ with tab_ocr_tool:
     with col_settings4:
         st.metric("Box Padding", f"X:{st.session_state.box_padding_x}px Y:{st.session_state.box_padding_y}px")
     
+    st.divider()
+
+    # Debug & Display Options (moved here from General tab)
+    st.subheader("Debug & Display Options")
+    dbg_col1, dbg_col2 = st.columns(2)
+    
+    with dbg_col1:
+        st.checkbox("Debug Mode", help="Show OCR text vs. Translation table.", key="debug_mode_checkbox")
+        st.checkbox("Show OCR Boxes", help="Zeigt nur die erkannten Textbereiche als Rahmen.", key="show_boxes_checkbox")
+        st.checkbox("Elliptical Bubbles", help="Nutze Ellipsen statt Rechtecken für übersetzte Textblasen.", key="use_ellipse_bubbles")
+    
+    with dbg_col2:
+        st.slider(
+            "Ellipse Padding X",
+            min_value=0,
+            max_value=80,
+            step=1,
+            key="ellipse_padding_x",
+            help="Zusätzliches horizontales Padding für Ellipsen-Sprechblasen (links/rechts).",
+        )
+        st.slider(
+            "Ellipse Padding Y",
+            min_value=0,
+            max_value=80,
+            step=1,
+            key="ellipse_padding_y",
+            help="Zusätzliches vertikales Padding für Ellipsen-Sprechblasen (oben/unten).",
+        )
+        st.slider(
+            "Bubble Grouping Distance (Global)", 
+            min_value=30, 
+            max_value=300, 
+            step=10,
+            key="bubble_threshold_setting",
+            help="Maximaler Abstand (Pixel) um Textzeilen zu einer Sprechblase zusammenzufassen. Höher = mehr Gruppierung."
+        )
+        st.slider(
+            "PDF Zoom Factor (Global)",
+            min_value=1.0,
+            max_value=3.0,
+            step=0.5,
+            key="pdf_zoom_factor",
+            help="Auflösung beim Importieren von PDFs. 2.0 = Standard. 1.0 = Schneller/Weicher. 3.0 = Schärfer."
+        )
+        st.slider(
+            "OCR Confidence Threshold (Global)",
+            min_value=0.0,
+            max_value=1.0,
+            step=0.05,
+            key="ocr_confidence_threshold",
+            help="Minimale Sicherheit für Textboxen. Boxen unter diesem Wert werden ignoriert."
+        )
+        st.slider(
+            "Box Padding X (Global)",
+            min_value=-10,
+            max_value=50,
+            step=1,
+            key="box_padding_x",
+            help="Vergrößert (>0) oder verkleinert (<0) die erkannten Boxen horizontal (links/rechts)."
+        )
+        st.slider(
+            "Box Padding Y (Global)",
+            min_value=-10,
+            max_value=50,
+            step=1,
+            key="box_padding_y",
+            help="Vergrößert (>0) oder verkleinert (<0) die erkannten Boxen vertikal (oben/unten)."
+        )
+
     st.divider()
     st.subheader("📄 Test OCR on PDF Pages")
     st.markdown("Lade ein PDF hoch, klicke auf eine Seite, und passe den Threshold an um die Sprechblasen-Erkennung zu optimieren.")
@@ -418,7 +447,16 @@ with tab_ocr_tool:
                                             text_regions.append((bbox, text, translated))
                                     
                                     # Create preview with translation overlay
-                                    preview_image = image_processor.overlay_text(image.copy(), text_regions)
+                                    use_ellipse = st.session_state.get('use_ellipse_bubbles', True)
+                                    ellipse_padding_x = st.session_state.get('ellipse_padding_x', 10)
+                                    ellipse_padding_y = st.session_state.get('ellipse_padding_y', 10)
+                                    preview_image = image_processor.overlay_text(
+                                        image.copy(),
+                                        text_regions,
+                                        use_ellipse=use_ellipse,
+                                        ellipse_padding_x=ellipse_padding_x,
+                                        ellipse_padding_y=ellipse_padding_y,
+                                    )
                                     st.image(preview_image, width="stretch")
                                     
                                 except Exception as e:

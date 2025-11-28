@@ -74,6 +74,12 @@ def main():
         st.session_state.debug_mode_checkbox = False
     if 'show_boxes_checkbox' not in st.session_state:
         st.session_state.show_boxes_checkbox = False
+    if 'use_ellipse_bubbles' not in st.session_state:
+        st.session_state.use_ellipse_bubbles = True
+    if 'ellipse_padding_x' not in st.session_state:
+        st.session_state.ellipse_padding_x = 28
+    if 'ellipse_padding_y' not in st.session_state:
+        st.session_state.ellipse_padding_y = 28
     if 'bubble_threshold_setting' not in st.session_state:
         st.session_state.bubble_threshold_setting = 160
     if 'ocr_engine_selection' not in st.session_state:
@@ -95,6 +101,9 @@ def main():
     service_choice = st.session_state.translation_service_selection
     debug_mode = st.session_state.debug_mode_checkbox
     show_boxes = st.session_state.show_boxes_checkbox
+    use_ellipse_bubbles = st.session_state.get('use_ellipse_bubbles', True)
+    ellipse_padding_x = st.session_state.get('ellipse_padding_x', 10)
+    ellipse_padding_y = st.session_state.get('ellipse_padding_y', 10)
     bubble_threshold = st.session_state.bubble_threshold_setting
     ocr_engine = st.session_state.ocr_engine_selection
     ocr_preprocess = st.session_state.ocr_preprocess_mode
@@ -420,7 +429,13 @@ def main():
                         # Nur Rahmen zeichnen ohne Text zu ersetzen
                         processed_img = image_processor.draw_boxes_only(img.copy(), text_regions)
                     else:
-                        processed_img = image_processor.overlay_text(img.copy(), text_regions)
+                        processed_img = image_processor.overlay_text(
+                            img.copy(),
+                            text_regions,
+                            use_ellipse=use_ellipse_bubbles,
+                            ellipse_padding_x=ellipse_padding_x,
+                            ellipse_padding_y=ellipse_padding_y,
+                        )
                     processed_images.append(processed_img)
                     
                     progress_bar.progress((i + 1) / len(images))
