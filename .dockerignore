@@ -1,0 +1,14 @@
+venv/
+.git/
+.gitignore
+.dockerignore
+__pycache__/
+*.pyc
+.DS_Store
+.env
+.streamlit/secrets.toml
+*.pdf
+*.png
+*.jpg
+.pytest_cache/
+tests/
