@@ -43,6 +43,12 @@ if 'ocr_engine_selection' not in st.session_state:
     st.session_state.ocr_engine_selection = "magi"
 if 'ocr_preprocess_mode' not in st.session_state:
     st.session_state.ocr_preprocess_mode = "gentle"
+if 'pdf_zoom_factor' not in st.session_state:
+    st.session_state.pdf_zoom_factor = 2.0
+if 'ocr_confidence_threshold' not in st.session_state:
+    st.session_state.ocr_confidence_threshold = 0.4
+if 'box_padding_setting' not in st.session_state:
+    st.session_state.box_padding_setting = 20
 
 # Create tabs for different configuration sections
 tab_general, tab_ocr_tool = st.tabs(["🌍 General Settings", "🔧 OCR Tool"])
@@ -90,6 +96,33 @@ with tab_general:
             key="bubble_threshold_setting",
             help="Maximaler Abstand (Pixel) um Textzeilen zu einer Sprechblase zusammenzufassen. Höher = mehr Gruppierung."
         )
+        
+        st.slider(
+            "PDF Zoom Factor (Global)",
+            min_value=1.0,
+            max_value=3.0,
+            step=0.5,
+            key="pdf_zoom_factor",
+            help="Auflösung beim Importieren von PDFs. 2.0 = Standard. 1.0 = Schneller/Weicher. 3.0 = Schärfer."
+        )
+        
+        st.slider(
+            "OCR Confidence Threshold (Global)",
+            min_value=0.0,
+            max_value=1.0,
+            step=0.05,
+            key="ocr_confidence_threshold",
+            help="Minimale Sicherheit für Textboxen. Boxen unter diesem Wert werden ignoriert."
+        )
+        
+        st.slider(
+            "Box Padding (Global)",
+            min_value=-10,
+            max_value=20,
+            step=1,
+            key="box_padding_setting",
+            help="Vergrößert (>0) oder verkleinert (<0) die erkannten Boxen um X Pixel."
+        )
 
 with tab_ocr_tool:
     st.header("OCR Configuration & Testing Tool")
@@ -109,9 +142,9 @@ with tab_ocr_tool:
     with col_ocr2:
         st.selectbox(
             "OCR Preprocessing",
-            options=['gentle', 'none', 'aggressive'],
+            options=['gentle', 'none', 'raw', 'aggressive'],
             key='ocr_preprocess_mode',
-            help="'gentle' = recommended for manga, 'none' = original image, 'aggressive' = strong binarization"
+            help="'gentle' = recommended for manga, 'none' = original image (3x scaled), 'raw' = no scaling, 'aggressive' = strong binarization"
         )
     
     st.divider()
@@ -239,12 +272,17 @@ with tab_ocr_tool:
                 
                 preprocess_mode = st.sidebar.selectbox(
                     "OCR Preprocessing",
-                    options=['gentle', 'none', 'aggressive'],
+                    options=['gentle', 'none', 'raw', 'aggressive'],
                     index=0,
-                    help="'gentle' = empfohlen für Manga, 'none' = Originalbild, 'aggressive' = starke Binarisierung"
+                    help="'gentle' = empfohlen für Manga, 'none' = Originalbild (3x), 'raw' = Keine Skalierung, 'aggressive' = starke Binarisierung"
                 )
                 
                 show_raw = st.sidebar.checkbox("Zeige Roh-OCR zum Vergleich", value=False)
+                
+                # New Test Controls
+                st.sidebar.markdown("---")
+                test_conf = st.sidebar.slider("Min Confidence", 0.0, 1.0, st.session_state.ocr_confidence_threshold, 0.05)
+                test_padding = st.sidebar.slider("Box Padding", -10, 20, st.session_state.box_padding_setting, 1)
                 
                 st.sidebar.divider()
                 st.sidebar.info("💡 **Tipps:**\n- Magi ist am besten für Manga\n- Gentle preprocessing empfohlen")
@@ -266,21 +304,47 @@ with tab_ocr_tool:
                     image = st.session_state.high_res_images[cache_key]
                     
                     # Run OCR (cached per page, engine, preprocess mode)
-                    ocr_key = f"ocr_{page_idx}_{ocr_engine}_{preprocess_mode}"
+                    # Run OCR (cached per page, engine, preprocess mode) - RAW RESULTS ONLY
+                    ocr_key = f"ocr_{page_idx}_{ocr_engine}_{preprocess_mode}_raw"
                     if ocr_key not in st.session_state.ocr_cache:
                         with st.spinner(f"🔍 Analysiere Text mit {ocr_engine.upper()}..."):
                             # Lazy load OCR handler here to avoid circular imports if any
                             from src.ocr_handler import OCRHandler
                             ocr_handler_tool = OCRHandler(lang_list=['en'], gpu=False, ocr_engine=ocr_engine)
                             
+                            # Get RAW results (no filtering/padding yet)
                             raw_results = ocr_handler_tool.detect_text(
                                 image, 
                                 paragraph=False, 
-                                preprocess_mode=preprocess_mode
+                                preprocess_mode=preprocess_mode,
+                                confidence_threshold=0.0,
+                                box_padding=0
                             )
                             st.session_state.ocr_cache[ocr_key] = raw_results
                     
-                    raw_results = st.session_state.ocr_cache[ocr_key]
+                    # Get cached raw results
+                    cached_raw_results = st.session_state.ocr_cache[ocr_key]
+                    
+                    # Apply dynamic filtering/padding
+                    from src.ocr_handler import OCRHandler
+                    # We need an instance to call the method, or make it static. It's an instance method.
+                    # Re-instantiating is cheap if model is lazy loaded or we reuse.
+                    # Ideally we reuse ocr_handler_tool but it's inside the if block.
+                    ocr_handler_tool = OCRHandler(lang_list=['en'], gpu=False, ocr_engine=ocr_engine)
+                    
+                    # Convert PIL Image to numpy array to get shape
+                    import numpy as np
+                    img_array = np.array(image)
+                    
+                    filtered_results = ocr_handler_tool.filter_results(
+                        cached_raw_results, 
+                        confidence_threshold=test_conf, 
+                        box_padding=test_padding,
+                        image_shape=img_array.shape[:2]
+                    )
+                    
+                    # Use filtered results for grouping and display
+                    raw_results = filtered_results
                     
                     # Group with current threshold
                     from src.ocr_handler import OCRHandler

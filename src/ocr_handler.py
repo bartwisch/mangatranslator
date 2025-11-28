@@ -113,10 +113,14 @@ class OCRHandler:
         Args:
             image: Input image as numpy array (RGB).
             mode: Preprocessing mode:
-                  - 'none': No preprocessing, use original image
+                  - 'none': No preprocessing, use original image (but currently scales 3x)
+                  - 'raw': No preprocessing, no scaling (returns original image)
                   - 'gentle': Light preprocessing (recommended for manga)
                   - 'aggressive': Heavy preprocessing (old behavior)
         """
+        if mode == 'raw':
+            return image
+
         if mode == 'none':
             # Scale up 3x for better recognition of thin characters like "I"
             return cv2.resize(image, None, fx=3, fy=3, interpolation=cv2.INTER_CUBIC)
@@ -147,14 +151,16 @@ class OCRHandler:
             
             return binary
 
-    def detect_text(self, image: Union[Image.Image, np.ndarray], paragraph: bool = True, preprocess_mode: str = 'gentle', tesseract_psm: int = 6, tesseract_confidence: int = 60) -> List[Tuple[List[Tuple[int, int]], str]]:
+    def detect_text(self, image: Union[Image.Image, np.ndarray], paragraph: bool = True, preprocess_mode: str = 'gentle', tesseract_psm: int = 6, tesseract_confidence: int = 60, confidence_threshold: float = 0.0, box_padding: int = 0) -> List[Tuple[List[Tuple[int, int]], str]]:
         """
         Detects text in an image.
         
         Args:
             image: PIL Image or numpy array.
             paragraph: If True, combines text lines into paragraphs (better for translation).
-            preprocess_mode: Preprocessing mode ('gentle', 'none', 'aggressive').
+            preprocess_mode: Preprocessing mode ('gentle', 'none', 'aggressive', 'raw').
+            confidence_threshold: Minimum confidence score (0.0-1.0) to keep a text box.
+            box_padding: Pixels to expand/shrink the bounding box.
             
         Returns:
             List of tuples: (bounding_box, text) or (bounding_box, text, confidence)
@@ -166,18 +172,75 @@ class OCRHandler:
         processed_image = self.preprocess_image(image, mode=preprocess_mode)
         
         # Scale factor depends on preprocessing mode
-        scale_factor = 3 if preprocess_mode == 'none' else 2
+        if preprocess_mode == 'raw':
+            scale_factor = 1
+        elif preprocess_mode == 'none':
+            scale_factor = 3
+        else:
+            scale_factor = 2
         
+        results = []
         if self.ocr_engine == 'magi':
-            return self._detect_with_magi(processed_image, scale_factor)
+            results = self._detect_with_magi(processed_image, scale_factor)
         elif self.ocr_engine == 'manga-ocr':
-            return self._detect_with_manga_ocr(processed_image, scale_factor)
+            results = self._detect_with_manga_ocr(processed_image, scale_factor)
         elif self.ocr_engine == 'paddleocr':
-            return self._detect_with_paddleocr(processed_image, scale_factor)
+            results = self._detect_with_paddleocr(processed_image, scale_factor)
         elif self.ocr_engine == 'easyocr':
-            return self._detect_with_easyocr(processed_image, paragraph, scale_factor)
+            results = self._detect_with_easyocr(processed_image, paragraph, scale_factor)
         else:
             raise ValueError(f"Unknown OCR engine: {self.ocr_engine}")
+
+        # Apply filtering and padding
+        return self.filter_results(results, confidence_threshold, box_padding, image.shape[:2])
+
+    def filter_results(self, results: List[Tuple], confidence_threshold: float, box_padding: int, image_shape: Tuple[int, int]) -> List[Tuple]:
+        """
+        Applies confidence filtering and box padding to OCR results.
+        
+        Args:
+            results: List of (bbox, text, [confidence]) tuples.
+            confidence_threshold: Minimum confidence to keep.
+            box_padding: Pixels to expand/shrink boxes.
+            image_shape: (height, width) of the image for boundary checks.
+            
+        Returns:
+            Filtered and padded results.
+        """
+        final_results = []
+        img_h, img_w = image_shape
+
+        for item in results:
+            # item is (bbox, text, confidence) or (bbox, text)
+            if len(item) == 3:
+                bbox, text, conf = item
+            else:
+                bbox, text = item
+                conf = 1.0 # Default if no confidence returned
+            
+            # Filter by confidence
+            if conf < confidence_threshold:
+                continue
+                
+            # Apply padding if needed
+            if box_padding != 0:
+                pts = np.array(bbox)
+                # Simple expansion of min/max is safer for rectangles
+                x_min = np.min(pts[:, 0])
+                y_min = np.min(pts[:, 1])
+                x_max = np.max(pts[:, 0])
+                y_max = np.max(pts[:, 1])
+                
+                x_min = max(0, x_min - box_padding)
+                y_min = max(0, y_min - box_padding)
+                x_max = min(img_w, x_max + box_padding)
+                y_max = min(img_h, y_max + box_padding)
+                
+                bbox = [[x_min, y_min], [x_max, y_min], [x_max, y_max], [x_min, y_max]]
+            
+            final_results.append((bbox, text, conf))
+            
+        return final_results
     
     def _detect_with_magi(self, processed_image: np.ndarray, scale_factor: int) -> List[Tuple]:
         """Detect text using Magi - The Manga Whisperer (best for manga)."""
@@ -189,6 +252,21 @@ class OCRHandler:
         if len(processed_image.shape) == 2:
             # Grayscale to RGB
             processed_image = np.stack([processed_image] * 3, axis=-1)
+            
+        # Explicit resizing to avoid internal model resizing issues
+        # Magi/detection models often have a max inference size. If we exceed it, 
+        # the model might resize internally but return coordinates on the resized image.
+        # We resize explicitly so we can track the scale.
+        MAX_DIM = 1280
+        h, w = processed_image.shape[:2]
+        resize_scale = 1.0
+        
+        if max(h, w) > MAX_DIM:
+            resize_scale = max(h, w) / MAX_DIM
+            new_w = int(w / resize_scale)
+            new_h = int(h / resize_scale)
+            # Use INTER_AREA for downscaling
+            processed_image = cv2.resize(processed_image, (new_w, new_h), interpolation=cv2.INTER_AREA)
         
         with torch.no_grad():
             # Detect text boxes
@@ -203,24 +281,32 @@ class OCRHandler:
         if results and len(results) > 0:
             text_boxes = results[0].get("texts", [])
             ocr_texts = ocr_results[0] if ocr_results else []
+            # Try to get scores if available (Magi might return them in 'scores' key for texts)
+            # Inspecting common output format: results[0] has 'texts', 'scores', 'labels' usually
+            scores = results[0].get("scores", [])
             
             for i, bbox in enumerate(text_boxes):
                 # bbox format: [x1, y1, x2, y2]
                 x1, y1, x2, y2 = bbox
                 
                 # Convert to 4-point format and scale back
+                # 1. Scale up from resized image to processed_image (multiply by resize_scale)
+                # 2. Scale down from processed_image to original image (divide by scale_factor)
+                combined_scale = resize_scale / scale_factor
+                
                 bbox_4pt = [
-                    [int(x1 / scale_factor), int(y1 / scale_factor)],
-                    [int(x2 / scale_factor), int(y1 / scale_factor)],
-                    [int(x2 / scale_factor), int(y2 / scale_factor)],
-                    [int(x1 / scale_factor), int(y2 / scale_factor)]
+                    [int(x1 * combined_scale), int(y1 * combined_scale)],
+                    [int(x2 * combined_scale), int(y1 * combined_scale)],
+                    [int(x2 * combined_scale), int(y2 * combined_scale)],
+                    [int(x1 * combined_scale), int(y2 * combined_scale)]
                 ]
                 
                 # Get OCR text if available
                 text = ocr_texts[i] if i < len(ocr_texts) else ""
+                conf = float(scores[i]) if i < len(scores) else 0.95
                 
                 if text.strip():
-                    final_results.append((bbox_4pt, text.strip(), 0.95))
+                    final_results.append((bbox_4pt, text.strip(), conf))
         
         return final_results
     
@@ -450,20 +536,29 @@ class OCRHandler:
         
         return merged_results
 
-    def detect_and_group_text(self, image: Union[Image.Image, np.ndarray], distance_threshold: float = 50, preprocess_mode: str = 'gentle') -> List[Tuple[List[List[int]], str]]:
+    def detect_and_group_text(self, image: Union[Image.Image, np.ndarray], distance_threshold: float = 50, preprocess_mode: str = 'gentle', confidence_threshold: float = 0.0, box_padding: int = 0) -> List[Tuple[List[List[int]], str]]:
         """
         Erkennt Text und gruppiert ihn automatisch nach Sprechblasen.
         
         Args:
             image: PIL Image oder numpy array.
             distance_threshold: Maximaler Abstand für Gruppierung (in Pixeln).
-            preprocess_mode: Preprocessing mode ('gentle', 'none', 'aggressive').
+            preprocess_mode: Preprocessing mode ('gentle', 'none', 'aggressive', 'raw').
+            confidence_threshold: Minimum confidence score.
+            box_padding: Padding for bounding boxes.
             
         Returns:
             Liste von (bbox, combined_text) Tupeln, gruppiert nach Sprechblasen.
         """
         # Erst einzelne Textblöcke erkennen (paragraph=False für feinere Kontrolle)
-        raw_results = self.detect_text(image, paragraph=False, preprocess_mode=preprocess_mode)
+        # Pass filtering params to detect_text
+        raw_results = self.detect_text(
+            image, 
+            paragraph=False, 
+            preprocess_mode=preprocess_mode,
+            confidence_threshold=confidence_threshold,
+            box_padding=box_padding
+        )
         
         # Dann nach räumlicher Nähe gruppieren
         grouped_results = self.group_text_into_bubbles(raw_results, distance_threshold)

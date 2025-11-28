@@ -79,7 +79,13 @@ def main():
     if 'ocr_engine_selection' not in st.session_state:
         st.session_state.ocr_engine_selection = "magi"
     if 'ocr_preprocess_mode' not in st.session_state:
-        st.session_state.ocr_preprocess_mode = "gentle"
+        st.session_state.ocr_preprocess_mode = "raw"
+    if 'pdf_zoom_factor' not in st.session_state:
+        st.session_state.pdf_zoom_factor = 2.0
+    if 'ocr_confidence_threshold' not in st.session_state:
+        st.session_state.ocr_confidence_threshold = 0.4
+    if 'box_padding_setting' not in st.session_state:
+        st.session_state.box_padding_setting = 20
     if 'stop_translation' not in st.session_state:
         st.session_state.stop_translation = False
 
@@ -90,6 +96,9 @@ def main():
     bubble_threshold = st.session_state.bubble_threshold_setting
     ocr_engine = st.session_state.ocr_engine_selection
     ocr_preprocess = st.session_state.ocr_preprocess_mode
+    pdf_zoom = st.session_state.pdf_zoom_factor
+    ocr_confidence = st.session_state.ocr_confidence_threshold
+    box_padding = st.session_state.box_padding_setting
 
     pdf_handler = PDFHandler()
     image_processor = ImageProcessor()
@@ -342,9 +351,9 @@ def main():
                 # 1. Extract Images (High Res for processing)
                 # Only extract the pages we actually need
                 status_placeholder = st.empty()
-                status_placeholder.info(f"📄 Extracting {len(selected_indices)} pages in high resolution...")
+                status_placeholder.info(f"📄 Extracting {len(selected_indices)} pages in high resolution (Zoom: {pdf_zoom}x)...")
                 
-                images = pdf_handler.extract_images_from_pdf(tmp_path, pages=selected_indices, zoom=2)
+                images = pdf_handler.extract_images_from_pdf(tmp_path, pages=selected_indices, zoom=pdf_zoom)
                 
                 processed_images = []
                 all_text_data = [] # For debug mode
@@ -385,7 +394,9 @@ def main():
                         ocr_results = ocr_handler.detect_and_group_text(
                             img, 
                             distance_threshold=bubble_threshold,
-                            preprocess_mode=ocr_preprocess
+                            preprocess_mode=ocr_preprocess,
+                            confidence_threshold=ocr_confidence,
+                            box_padding=box_padding
                         )
                         
                         for bbox, text in ocr_results:
