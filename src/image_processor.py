@@ -292,30 +292,6 @@ class ImageProcessor:
             fill_x_max = max(ocr_x_max, center_x + text_w) + ellipse_padding_x
             fill_y_max = max(ocr_y_max, center_y + text_h) + ellipse_padding_y
             
-            if use_ellipse:
-                # Ensure ellipse covers the corners of the original OCR box
-                # An ellipse inscribed in a box only touches the centers of the sides.
-                # To cover the corners of a box of size WxH, the ellipse needs to be larger.
-                # Using a factor of 1.1 for width (user feedback: 1.25 was still too wide)
-                # and 1.5 for height to ensure corner coverage.
-                
-                ocr_cx = (ocr_x_min + ocr_x_max) / 2
-                ocr_cy = (ocr_y_min + ocr_y_max) / 2
-                
-                min_ellipse_w = ocr_width * 1.1
-                min_ellipse_h = ocr_height * 1.5
-                
-                min_fill_x_min = ocr_cx - min_ellipse_w / 2
-                min_fill_y_min = ocr_cy - min_ellipse_h / 2
-                min_fill_x_max = ocr_cx + min_ellipse_w / 2
-                min_fill_y_max = ocr_cy + min_ellipse_h / 2
-                
-                # Merge with existing fill bounds
-                fill_x_min = min(fill_x_min, min_fill_x_min)
-                fill_y_min = min(fill_y_min, min_fill_y_min)
-                fill_x_max = max(fill_x_max, min_fill_x_max)
-                fill_y_max = max(fill_y_max, min_fill_y_max)
-            
             # Clamp to image bounds
             fill_x_min = max(0, fill_x_min)
             fill_y_min = max(0, fill_y_min)

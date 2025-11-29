@@ -24,11 +24,19 @@ if 'ocr_cache' not in st.session_state:
 if 'high_res_images' not in st.session_state:
     st.session_state.high_res_images = {}
 
+from src.utils import load_local_secrets
+
 # --- Global Settings (Session State) ---
 if 'stored_deepl_key' not in st.session_state:
     st.session_state.stored_deepl_key = ""
 if 'stored_openai_key' not in st.session_state:
-    st.session_state.stored_openai_key = ""
+    # Try to load from secrets
+    secrets = load_local_secrets()
+    key = secrets.get('openai_api_key') or secrets.get('openai_key')
+    if key:
+        st.session_state.stored_openai_key = key
+    else:
+        st.session_state.stored_openai_key = ""
 if 'stored_xai_key' not in st.session_state:
     st.session_state.stored_xai_key = ""
 if 'translation_service_selection' not in st.session_state:
@@ -299,8 +307,7 @@ with tab_ocr_tool:
                 # Initialize cols for the first row
                 cols = st.columns(num_cols)
                 
-                for i, preview in enumerate(st.session_state.config_previews):
-                    # Create new columns for every new row (every num_cols items)
+
                 # Calculate target aspect ratio (tallest image in the batch)
                 # We want all images to have the same height when displayed in fixed-width columns.
                 # So they must have the same aspect ratio.
@@ -348,204 +355,179 @@ with tab_ocr_tool:
                             type="secondary"
                         )
             
-            # If page selected, show OCR config
-            if st.session_state.selected_page is not None:
-                if st.button("← Zurück zur Übersicht"):
-                    st.session_state.selected_page = None
-                    st.rerun()
-                
+            else:
+                # Page selected: 2-Column Layout (Parameters Left | Preview Right)
                 st.divider()
                 
-                page_idx = st.session_state.selected_page
+                # Create main layout columns
+                # Ratio 1:2 gives more space to the image
+                param_col, preview_col = st.columns([1, 2])
                 
-                # Sidebar controls for OCR Tool
-                st.sidebar.header("🔧 OCR Tool Einstellungen")
-                
-                # Local threshold for this tool, defaulting to global setting
-                tool_bubble_threshold = st.sidebar.slider(
-                    "Bubble Grouping Distance (Test)", 
-                    min_value=30, 
-                    max_value=400, 
-                    value=st.session_state.bubble_threshold_setting, 
-                    step=10,
-                    help="Test-Wert für diesen Viewer. Ändert nicht die globale Einstellung."
-                )
-                
-                ocr_engine = st.sidebar.selectbox(
-                    "OCR Engine",
-                    options=['magi', 'manga-ocr', 'paddleocr', 'easyocr'],
-                    index=0,
-                    help="'magi' = beste für Manga (erkennt Sprechblasen) [STANDARD], 'manga-ocr' = experimentell für Manga-Fonts (optional), 'paddleocr' = schnell"
-                )
-                
-                preprocess_mode = st.sidebar.selectbox(
-                    "OCR Preprocessing",
-                    options=['gentle', 'none', 'raw', 'aggressive'],
-                    index=0,
-                    help="'gentle' = empfohlen für Manga, 'none' = Originalbild (3x), 'raw' = Keine Skalierung, 'aggressive' = starke Binarisierung"
-                )
-                
-                show_raw = st.sidebar.checkbox("Zeige Roh-OCR zum Vergleich", value=False)
-                show_translation_preview = st.sidebar.checkbox("Zeige Übersetzungs-Vorschau", value=False, help="Zeigt wie der übersetzte Text aussehen würde (mit weißem Hintergrund)")
-                
-                # New Test Controls
-                st.sidebar.markdown("---")
-                test_conf = st.sidebar.slider("Min Confidence", 0.0, 1.0, st.session_state.ocr_confidence_threshold, 0.05)
-                test_padding_x = st.sidebar.slider("Box Padding X", -10, 50, st.session_state.box_padding_x, 1, help="Horizontal (links/rechts)")
-                test_padding_y = st.sidebar.slider("Box Padding Y", -10, 50, st.session_state.box_padding_y, 1, help="Vertikal (oben/unten)")
-                
-                st.sidebar.divider()
-                st.sidebar.info("💡 **Tipps:**\n- Magi ist am besten für Manga\n- Gentle preprocessing empfohlen")
-                
-                # Load high-res image for selected page
-                cache_key = f"page_{page_idx}"
-                
-                if cache_key not in st.session_state.high_res_images:
-                    with st.spinner(f"Lade Seite {page_idx + 1} in hoher Auflösung..."):
-                        high_res = pdf_handler.extract_images_from_pdf(
-                            st.session_state.config_pdf_path, 
-                            pages=[page_idx], 
-                            zoom=2
-                        )
-                        if high_res:
-                            st.session_state.high_res_images[cache_key] = high_res[0]
-                
-                if cache_key in st.session_state.high_res_images:
-                    image = st.session_state.high_res_images[cache_key]
+                with param_col:
+                    st.subheader("🔧 Einstellungen")
                     
-                    # Run OCR (cached per page, engine, preprocess mode)
-                    # Run OCR (cached per page, engine, preprocess mode) - RAW RESULTS ONLY
-                    ocr_key = f"ocr_{page_idx}_{ocr_engine}_{preprocess_mode}_raw"
-                    if ocr_key not in st.session_state.ocr_cache:
-                        with st.spinner(f"🔍 Analysiere Text mit {ocr_engine.upper()}..."):
-                            # Lazy load OCR handler here to avoid circular imports if any
-                            from src.ocr_handler import OCRHandler
-                            ocr_handler_tool = OCRHandler(lang_list=['en'], gpu=False, ocr_engine=ocr_engine)
-                            
-                            # Get RAW results (no filtering/padding yet)
-                            raw_results = ocr_handler_tool.detect_text(
-                                image, 
-                                paragraph=False, 
-                                preprocess_mode=preprocess_mode,
-                                confidence_threshold=0.0,
-                                box_padding_x=0,
-                                box_padding_y=0
-                            )
-                            st.session_state.ocr_cache[ocr_key] = raw_results
+                    # --- Controls moved from Sidebar to Left Column ---
                     
-                    # Get cached raw results
-                    cached_raw_results = st.session_state.ocr_cache[ocr_key]
-                    
-                    # Apply dynamic filtering/padding
-                    from src.ocr_handler import OCRHandler
-                    # We need an instance to call the method, or make it static. It's an instance method.
-                    # Re-instantiating is cheap if model is lazy loaded or we reuse.
-                    # Ideally we reuse ocr_handler_tool but it's inside the if block.
-                    ocr_handler_tool = OCRHandler(lang_list=['en'], gpu=False, ocr_engine=ocr_engine)
-                    
-                    # Convert PIL Image to numpy array to get shape
-                    import numpy as np
-                    img_array = np.array(image)
-                    
-                    filtered_results = ocr_handler_tool.filter_results(
-                        cached_raw_results, 
-                        confidence_threshold=test_conf, 
-                        box_padding_x=test_padding_x,
-                        box_padding_y=test_padding_y,
-                        image_shape=img_array.shape[:2]
+                    # Local threshold for this tool
+                    tool_bubble_threshold = st.slider(
+                        "Bubble Grouping Distance", 
+                        min_value=30, 
+                        max_value=400, 
+                        value=st.session_state.bubble_threshold_setting, 
+                        step=10,
+                        help="Maximaler Abstand (Pixel) um Textzeilen zu einer Sprechblase zusammenzufassen."
                     )
                     
-                    # Use filtered results for grouping and display
-                    raw_results = filtered_results
+                    ocr_engine = st.selectbox(
+                        "OCR Engine",
+                        options=['magi', 'manga-ocr', 'paddleocr', 'easyocr'],
+                        index=0,
+                        help="'magi' = beste für Manga (erkennt Sprechblasen)"
+                    )
                     
-                    # Group with current threshold
-                    from src.ocr_handler import OCRHandler
-                    ocr_handler_tool = OCRHandler(lang_list=['en'], gpu=False, ocr_engine=ocr_engine)
-                    grouped_results = ocr_handler_tool.group_text_into_bubbles(raw_results, distance_threshold=tool_bubble_threshold)
+                    preprocess_mode = st.selectbox(
+                        "OCR Preprocessing",
+                        options=['gentle', 'none', 'raw', 'aggressive'],
+                        index=0,
+                        help="'gentle' = empfohlen für Manga"
+                    )
                     
-                    # Display
-                    st.subheader(f"📄 Seite {page_idx + 1} - OCR Ergebnis")
+                    st.markdown("---")
+                    st.markdown("**Box & Text Tuning**")
                     
-                    # Translation Preview Mode
-                    if show_translation_preview:
-                        st.markdown(f"**🎨 Übersetzungs-Vorschau: {len(grouped_results)} Boxen** (Padding: X={test_padding_x}px, Y={test_padding_y}px)")
+                    test_conf = st.slider("Min Confidence", 0.0, 1.0, st.session_state.ocr_confidence_threshold, 0.05)
+                    test_padding_x = st.slider("Box Padding X", -10, 50, st.session_state.box_padding_x, 1, help="Horizontal")
+                    test_padding_y = st.slider("Box Padding Y", -10, 50, st.session_state.box_padding_y, 1, help="Vertikal")
+                    
+                    st.markdown("---")
+                    st.markdown("**Anzeige Optionen**")
+                    show_raw = st.checkbox("Zeige Roh-OCR", value=False)
+                    show_translation_preview = st.checkbox("Zeige Übersetzungs-Vorschau", value=False)
+                    
+                    if st.button("← Zurück zur Übersicht", type="secondary"):
+                        st.session_state.selected_page = None
+                        st.rerun()
+
+                with preview_col:
+                    page_idx = st.session_state.selected_page
+                    st.subheader(f"📄 Vorschau: Seite {page_idx + 1}")
+                    
+                    # Load high-res image for selected page
+                    cache_key = f"page_{page_idx}"
+                    
+                    if cache_key not in st.session_state.high_res_images:
+                        with st.spinner(f"Lade Seite {page_idx + 1} in hoher Auflösung..."):
+                            high_res = pdf_handler.extract_images_from_pdf(
+                                st.session_state.config_pdf_path, 
+                                pages=[page_idx], 
+                                zoom=2
+                            )
+                            if high_res:
+                                st.session_state.high_res_images[cache_key] = high_res[0]
+                    
+                    if cache_key in st.session_state.high_res_images:
+                        image = st.session_state.high_res_images[cache_key]
                         
-                        # Import translator and image processor
-                        from src.translator import TranslatorService
-                        from src.image_processor import ImageProcessor
+                        # Run OCR (cached per page, engine, preprocess mode) - RAW RESULTS ONLY
+                        ocr_key = f"ocr_{page_idx}_{ocr_engine}_{preprocess_mode}_raw"
+                        if ocr_key not in st.session_state.ocr_cache:
+                            with st.spinner(f"🔍 Analysiere Text mit {ocr_engine.upper()}..."):
+                                from src.ocr_handler import OCRHandler
+                                ocr_handler_tool = OCRHandler(lang_list=['en'], gpu=False, ocr_engine=ocr_engine)
+                                
+                                # Get RAW results (no filtering/padding yet)
+                                raw_results = ocr_handler_tool.detect_text(
+                                    image, 
+                                    paragraph=False, 
+                                    preprocess_mode=preprocess_mode,
+                                    confidence_threshold=0.0,
+                                    box_padding_x=0,
+                                    box_padding_y=0
+                                )
+                                st.session_state.ocr_cache[ocr_key] = raw_results
                         
-                        # Get API key from session state
-                        api_key = st.session_state.get('stored_openai_key', '')
+                        # Get cached raw results
+                        cached_raw_results = st.session_state.ocr_cache[ocr_key]
                         
-                        if not api_key:
-                            st.warning("⚠️ Kein OpenAI API Key gefunden. Bitte in den Einstellungen eingeben.")
-                            # Show boxes instead
-                            preview_image = draw_boxes(image, grouped_results)
-                            st.image(preview_image, width="stretch")
+                        # Apply dynamic filtering/padding
+                        from src.ocr_handler import OCRHandler
+                        ocr_handler_tool = OCRHandler(lang_list=['en'], gpu=False, ocr_engine=ocr_engine)
+                        
+                        import numpy as np
+                        img_array = np.array(image)
+                        
+                        filtered_results = ocr_handler_tool.filter_results(
+                            cached_raw_results, 
+                            confidence_threshold=test_conf, 
+                            box_padding_x=test_padding_x,
+                            box_padding_y=test_padding_y,
+                            image_shape=img_array.shape[:2]
+                        )
+                        
+                        # Use filtered results for grouping and display
+                        raw_results = filtered_results
+                        
+                        # Group with current threshold
+                        grouped_results = ocr_handler_tool.group_text_into_bubbles(raw_results, distance_threshold=tool_bubble_threshold)
+                        
+                        # Display Logic
+                        if show_translation_preview:
+                            # Import translator and image processor
+                            from src.translator import TranslatorService
+                            from src.image_processor import ImageProcessor
+                            
+                            # Get API key from session state
+                            api_key = st.session_state.get('stored_openai_key', '')
+                            
+                            if not api_key:
+                                st.warning("⚠️ Kein OpenAI API Key gefunden.")
+                                preview_image = draw_boxes(image, grouped_results)
+                                st.image(preview_image, width="stretch")
+                            else:
+                                with st.spinner("Übersetze Text..."):
+                                    try:
+                                        translator = TranslatorService(source='en', target='de', service_type='openai', api_key=api_key)
+                                        image_processor = ImageProcessor()
+                                        
+                                        # Prepare text regions for translation
+                                        text_regions = []
+                                        for bbox, text in grouped_results:
+                                            if len(text.strip()) >= 2:
+                                                translated = translator.translate_text(text)
+                                                text_regions.append((bbox, text, translated))
+                                        
+                                        # Create preview with translation overlay
+                                        use_ellipse = st.session_state.get('use_ellipse_bubbles', True)
+                                        ellipse_padding_x = st.session_state.get('ellipse_padding_x', 28)
+                                        ellipse_padding_y = st.session_state.get('ellipse_padding_y', 28)
+                                        preview_image = image_processor.overlay_text(
+                                            image.copy(),
+                                            text_regions,
+                                            use_ellipse=use_ellipse,
+                                            ellipse_padding_x=ellipse_padding_x,
+                                            ellipse_padding_y=ellipse_padding_y,
+                                        )
+                                        st.image(preview_image, width="stretch")
+                                        
+                                    except Exception as e:
+                                        st.error(f"Übersetzungsfehler: {e}")
+                                        preview_image = draw_boxes(image, grouped_results)
+                                        st.image(preview_image, width="stretch")
+                        
+                        elif show_raw:
+                            st.markdown(f"**🔴 Roh-OCR vs 🟢 Gruppiert**")
+                            col_raw, col_grp = st.columns(2)
+                            with col_raw:
+                                st.caption("Roh")
+                                st.image(draw_boxes(image, raw_results), width="stretch")
+                            with col_grp:
+                                st.caption("Gruppiert")
+                                st.image(draw_boxes(image, grouped_results), width="stretch")
                         else:
-                            with st.spinner("Übersetze Text..."):
-                                try:
-                                    translator = TranslatorService(source='en', target='de', service_type='openai', api_key=api_key)
-                                    image_processor = ImageProcessor()
-                                    
-                                    # Prepare text regions for translation
-                                    text_regions = []
-                                    for bbox, text in grouped_results:
-                                        if len(text.strip()) >= 2:
-                                            translated = translator.translate_text(text)
-                                            text_regions.append((bbox, text, translated))
-                                    
-                                    # Create preview with translation overlay
-                                    use_ellipse = st.session_state.get('use_ellipse_bubbles', True)
-                                    ellipse_padding_x = st.session_state.get('ellipse_padding_x', 28)
-                                    ellipse_padding_y = st.session_state.get('ellipse_padding_y', 28)
-                                    preview_image = image_processor.overlay_text(
-                                        image.copy(),
-                                        text_regions,
-                                        use_ellipse=use_ellipse,
-                                        ellipse_padding_x=ellipse_padding_x,
-                                        ellipse_padding_y=ellipse_padding_y,
-                                    )
-                                    st.image(preview_image, width="stretch")
-                                    
-                                except Exception as e:
-                                    st.error(f"Übersetzungsfehler: {e}")
-                                    # Fallback to boxes
-                                    preview_image = draw_boxes(image, grouped_results)
-                                    st.image(preview_image, width="stretch")
-                    
-                    elif show_raw:
-                        col1, col2 = st.columns(2)
+                            st.image(draw_boxes(image, grouped_results), width="stretch")
                         
-                        with col1:
-                            st.markdown(f"**🔴 Roh-OCR: {len(raw_results)} Boxen**")
-                            raw_image = draw_boxes(image, raw_results)
-                            st.image(raw_image, width="stretch")
-                        
-                        with col2:
-                            st.markdown(f"**🟢 Gruppiert: {len(grouped_results)} Boxen** (Threshold: {tool_bubble_threshold}px)")
-                            grouped_image = draw_boxes(image, grouped_results)
-                            st.image(grouped_image, width="stretch")
-                    else:
-                        st.markdown(f"**🟢 Gruppiert: {len(grouped_results)} Boxen** (Threshold: {tool_bubble_threshold}px)")
-                        grouped_image = draw_boxes(image, grouped_results)
-                        st.image(grouped_image, width="stretch")
-                    
-                    # Show detected texts
-                    with st.expander(f"📝 Erkannte Texte ({len(grouped_results)} Gruppen)", expanded=True):
-                        for i, item in enumerate(grouped_results):
-                            text = item[1] if len(item) > 1 else ""
-                            colors = ["🔴", "🔵", "🟢", "🟠", "🟣", "🩵", "🩷", "🟡"]
-                            color = colors[i % len(colors)]
-                            st.markdown(f"{color} **[{i+1}]** {text}")
-                    
-                    # Stats
-                    st.divider()
-                    col_stat1, col_stat2, col_stat3 = st.columns(3)
-                    col_stat1.metric("Roh-Boxen", len(raw_results))
-                    col_stat2.metric("Gruppierte Boxen", len(grouped_results))
-                    reduction = 100 - (len(grouped_results) / max(len(raw_results), 1) * 100)
-                    col_stat3.metric("Reduktion", f"{reduction:.0f}%")
+                        # Stats below image
+                        st.caption(f"Boxen: {len(raw_results)} (Roh) -> {len(grouped_results)} (Gruppiert)")
 
     else:
         st.info("👆 Lade ein PDF hoch um die OCR-Boxen zu konfigurieren.")

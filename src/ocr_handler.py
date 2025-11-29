@@ -261,6 +261,7 @@ class OCRHandler:
         # We resize explicitly so we can track the scale.
         MAX_DIM = 1280
         h, w = processed_image.shape[:2]
+        original_h, original_w = h, w
         resize_scale = 1.0
         
         if max(h, w) > MAX_DIM:
@@ -269,6 +270,9 @@ class OCRHandler:
             new_h = int(h / resize_scale)
             # Use INTER_AREA for downscaling
             processed_image = cv2.resize(processed_image, (new_w, new_h), interpolation=cv2.INTER_AREA)
+            print(f"Magi: Resized image from {w}x{h} to {new_w}x{new_h} (resize_scale={resize_scale:.2f})")
+        else:
+            print(f"Magi: Image {w}x{h} within MAX_DIM, no resize needed")
         
         with torch.no_grad():
             # Detect text boxes
@@ -291,10 +295,30 @@ class OCRHandler:
                 # bbox format: [x1, y1, x2, y2]
                 x1, y1, x2, y2 = bbox
                 
-                # Convert to 4-point format and scale back
-                # 1. Scale up from resized image to processed_image (multiply by resize_scale)
-                # 2. Scale down from processed_image to original image (divide by scale_factor)
-                combined_scale = resize_scale / scale_factor
+                # Magi gibt Koordinaten auf dem resized Bild zurück
+                # Wir müssen sie auf das processed_image zurückskalieren (resize_scale)
+                # und dann auf das Original-Bild (scale_factor)
+                
+                # TEST: Prüfe ob Koordinaten plausibel für das verkleinerte Bild sind
+                resized_w = original_w / resize_scale if resize_scale > 1 else original_w
+                resized_h = original_h / resize_scale if resize_scale > 1 else original_h
+                
+                # Wenn Koordinaten größer als das verkleinerte Bild sind,
+                # hat Magi sie bereits zurückskaliert
+                if x2 > resized_w * 1.1 or y2 > resized_h * 1.1:
+                    # Koordinaten sind bereits für das große Bild - nur scale_factor anwenden
+                    effective_resize_scale = 1.0
+                    if i == 0:
+                        print(f"Magi: Coords seem already scaled to original (x2={x2:.0f} > resized_w={resized_w:.0f})")
+                else:
+                    effective_resize_scale = resize_scale
+                    if i == 0:
+                        print(f"Magi: Coords on resized image, will scale by {effective_resize_scale:.2f}")
+                
+                combined_scale = effective_resize_scale / scale_factor
+                
+                if i == 0:  # Debug first box
+                    print(f"Magi coords: raw=({x1:.0f},{y1:.0f})-({x2:.0f},{y2:.0f}), combined_scale={combined_scale:.2f}")
                 
                 bbox_4pt = [
                     [int(x1 * combined_scale), int(y1 * combined_scale)],
