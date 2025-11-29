@@ -3,6 +3,7 @@ import os
 import tempfile
 import certifi
 import json
+from PIL import Image
 from src.pdf_handler import PDFHandler
 from src.ocr_handler import OCRHandler
 from src.translator import TranslatorService
@@ -315,7 +316,23 @@ def main():
                 </style>
             """, unsafe_allow_html=True)
 
+            # Calculate target aspect ratio (tallest image in the batch)
+            target_ratio = 1000.0
+            if st.session_state.preview_images:
+                for img in st.session_state.preview_images:
+                    w, h = img.size
+                    ratio = w / h
+                    if ratio < target_ratio:
+                        target_ratio = ratio
+                
+                # Limit extreme ratios
+                target_ratio = max(target_ratio, 0.5)
+
             for i, img in enumerate(st.session_state.preview_images):
+                # Create new columns for every new row
+                if i > 0 and i % num_cols == 0:
+                    cols = st.columns(num_cols)
+
                 with cols[i % num_cols]:
                     # Create a bordered container for the "card" look
                     with st.container(border=True):
@@ -341,7 +358,23 @@ def main():
                         
                         # Image with negative margin to pull it up closer
                         st.markdown('<div style="margin-top: -10px;"></div>', unsafe_allow_html=True)
-                        st.image(img, width="stretch")
+                        
+                        # Normalize image to target ratio
+                        w, h = img.size
+                        current_ratio = w / h
+                        
+                        if abs(current_ratio - target_ratio) > 0.01:
+                            # Pad to match target ratio (which is taller/narrower)
+                            new_h = int(w / target_ratio)
+                            new_w = w
+                            
+                            # Create background (dark gray for dark mode compatibility)
+                            norm_img = Image.new("RGB", (new_w, new_h), (30, 30, 30))
+                            offset_y = (new_h - h) // 2
+                            norm_img.paste(img, (0, offset_y))
+                            st.image(norm_img, width="stretch")
+                        else:
+                            st.image(img, width="stretch")
                         
                         # Second toggle button below image (for clicking on image area)
                         # Using a minimal icon-only button

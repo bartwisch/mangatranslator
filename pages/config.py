@@ -301,13 +301,44 @@ with tab_ocr_tool:
                 
                 for i, preview in enumerate(st.session_state.config_previews):
                     # Create new columns for every new row (every num_cols items)
+                # Calculate target aspect ratio (tallest image in the batch)
+                # We want all images to have the same height when displayed in fixed-width columns.
+                # So they must have the same aspect ratio.
+                target_ratio = 1000.0
+                if st.session_state.config_previews:
+                    for img in st.session_state.config_previews:
+                        w, h = img.size
+                        ratio = w / h
+                        if ratio < target_ratio:
+                            target_ratio = ratio
+                    
+                    # Limit extreme ratios (e.g. very long strips)
+                    target_ratio = max(target_ratio, 0.5)
+
+                for i, preview in enumerate(st.session_state.config_previews):
+                    # Create new columns for every new row (every num_cols items)
                     if i > 0 and i % num_cols == 0:
                         cols = st.columns(num_cols)
                     
                     with cols[i % num_cols]:
                         st.markdown(f"Seite {i+1}")
                         
-                        st.image(preview, width="stretch")
+                        # Normalize image to target ratio
+                        w, h = preview.size
+                        current_ratio = w / h
+                        
+                        if abs(current_ratio - target_ratio) > 0.01:
+                            # Pad to match target ratio (which is taller/narrower)
+                            new_h = int(w / target_ratio)
+                            new_w = w
+                            
+                            # Create background (dark gray for dark mode compatibility)
+                            norm_img = Image.new("RGB", (new_w, new_h), (30, 30, 30))
+                            offset_y = (new_h - h) // 2
+                            norm_img.paste(preview, (0, offset_y))
+                            st.image(norm_img, width="stretch")
+                        else:
+                            st.image(preview, width="stretch")
                         
                         st.button(
                             f"Auswählen", 
