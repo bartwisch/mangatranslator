@@ -296,13 +296,13 @@ class ImageProcessor:
                 # Ensure ellipse covers the corners of the original OCR box
                 # An ellipse inscribed in a box only touches the centers of the sides.
                 # To cover the corners of a box of size WxH, the ellipse needs to be larger.
-                # Using a factor of 1.25 for width (user feedback: 1.5 was too wide)
+                # Using a factor of 1.1 for width (user feedback: 1.25 was still too wide)
                 # and 1.5 for height to ensure corner coverage.
                 
                 ocr_cx = (ocr_x_min + ocr_x_max) / 2
                 ocr_cy = (ocr_y_min + ocr_y_max) / 2
                 
-                min_ellipse_w = ocr_width * 1.25
+                min_ellipse_w = ocr_width * 1.1
                 min_ellipse_h = ocr_height * 1.5
                 
                 min_fill_x_min = ocr_cx - min_ellipse_w / 2
