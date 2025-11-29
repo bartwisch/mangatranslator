@@ -296,9 +296,14 @@ with tab_ocr_tool:
                 st.subheader("📖 Seite auswählen")
                 
                 num_cols = 5
+                # Initialize cols for the first row
                 cols = st.columns(num_cols)
                 
                 for i, preview in enumerate(st.session_state.config_previews):
+                    # Create new columns for every new row (every num_cols items)
+                    if i > 0 and i % num_cols == 0:
+                        cols = st.columns(num_cols)
+                    
                     with cols[i % num_cols]:
                         st.markdown(f"Seite {i+1}")
                         
